@@ -52,6 +52,10 @@ class RecNFP:
         self.st_theta     = self.cl_mpi.st_theta
         self.end_theta    = self.cl_mpi.end_theta
 
+        if self.rank == 0 and hasattr(self, 'path_out') and self.path_out:
+            os.makedirs(os.path.join(self.path_out, 'checkpoints_tiff'), exist_ok=True)
+        args.comm.Barrier()
+
         wavelength    = 1.24e-09 / self.energy
         z1            = self.z1
         z2            = self.focustodetectordistance - z1
@@ -419,28 +423,30 @@ class RecNFP:
         return float(self.allreduce(np.array([out[0].get()], dtype='float32'))[0])
 
     def vis_debug(self, vars, i, writer=None):
-        if not (i % self.vis_step == 0 and self.vis_step != -1):
+        if not (i % self.checkpoint_step == 0 and self.checkpoint_step != -1):
             return
         if writer is not None:
             if i > self.start_iter:
                 writer.write_checkpoint(vars, i)
             if self.rank == 0 and hasattr(self, 'path_out') and self.path_out:
-                tiff_path = os.path.join(self.path_out, f'checkpoint_{i:04}_proj_re.tiff')
+                tiff_dir  = os.path.join(self.path_out, 'checkpoints_tiff')
+                tiff_path = os.path.join(tiff_dir, f'checkpoint_{i:04}_proj_re.tiff')
                 tifffile.imwrite(tiff_path, cp.asnumpy(vars['proj'].real))
                 logger.info(f"NFP: proj_re TIFF saved → {tiff_path}")
         elif self.rank == 0:
             if hasattr(self, 'path_out'):
-                logger.info(f"Saving iter {i}: proj, prb to {self.path_out}")
-                write_tiff(vars['proj'].real,     f'{self.path_out}/proj{i:04}')
-                write_tiff(cp.angle(vars['prb']), f'{self.path_out}/prb{i:04}')
-                np.save(f'{self.path_out}/prb{i:04}.npy', vars['prb'].get())
+                tiff_dir = os.path.join(self.path_out, 'checkpoints_tiff')
+                logger.info(f"Saving iter {i}: proj, prb to {tiff_dir}")
+                write_tiff(vars['proj'].real,     f'{tiff_dir}/proj{i:04}')
+                write_tiff(cp.angle(vars['prb']), f'{tiff_dir}/prb{i:04}')
+                np.save(f'{tiff_dir}/prb{i:04}.npy', vars['prb'].get())
             else:
                 mshow(vars['proj'].real, True)
                 mshow_polar(vars['prb'], True)
                 mshow_pos(vars['pos'] - self.pos_init, True)
 
     def error_debug(self, vars, i):
-        if not (i % self.err_step == 0 and self.err_step != -1):
+        if not (i % self.error_step == 0 and self.error_step != -1):
             return
         err = self.min(vars['prb'], vars['proj'], vars['pos'])
 

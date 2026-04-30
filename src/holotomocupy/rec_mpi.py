@@ -836,7 +836,7 @@ class Rec:
 
     def vis_debug(self, vars, i,writer=None):
         """Save reconstruction checkpoint to HDF5."""
-        if not (i % self.vis_step == 0 and self.vis_step != -1):
+        if not (i % self.checkpoint_step == 0 and self.checkpoint_step != -1):
             return
         if writer is not None:
             if i > self.start_iter:
@@ -861,7 +861,7 @@ class Rec:
     
     def error_debug(self, vars, i):
         """Error logging and CSV checkpoint export."""
-        if not (i % self.err_step == 0 and self.err_step != -1):
+        if not (i % self.error_step == 0 and self.error_step != -1):
             return
             
         err = self.min(vars["prb"], vars["obj"], vars["pos"], vars["proj"])        

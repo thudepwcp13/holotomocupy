@@ -27,8 +27,8 @@ _ref_id     = str(dataset_ids[0])   # index used in the conf-file paths
 n        = args.n
 niter    = args.niter
 nchunk   = args.nchunk
-vis_step = args.vis_step
-err_step = args.err_step
+checkpoint_step = args.checkpoint_step
+error_step = args.error_step
 rho      = args.rho
 
 # ---------------------------------------------------------------------------
@@ -138,8 +138,8 @@ for dataset_id in dataset_ids:
         rho                     = rho,
         niter                   = niter,
         nchunk                  = nchunk,
-        vis_step                = vis_step,
-        err_step                = err_step,
+        checkpoint_step = checkpoint_step,
+        error_step = error_step,
         start_iter              = 0,
         path_out                = _path_out,
         comm                    = comm,

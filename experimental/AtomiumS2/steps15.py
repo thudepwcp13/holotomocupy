@@ -36,6 +36,7 @@ args = parse_args_steps15(sys.argv[1])
 start_step            = args.start_step
 rotation_center_shift = args.rotation_center_shift
 nlevels               = args.nlevels
+start_level_rec       = args.start_level_rec
 paganin               = args.paganin
 nchunk                = args.nchunk
 ref_dist              = args.ref_dist
@@ -655,7 +656,7 @@ else:
             pass
     comm.Barrier()
 
-    for bin in range(nlevels):
+    for bin in range(start_level_rec, nlevels):
         n_bin         = n // (2**bin)
         nobj_bin      = nobj // (2**bin)
         voxelsize_bin = voxelsize * (2**bin)
@@ -664,7 +665,7 @@ else:
 
         scale = 1.0 / 2**bin
         r = (cshifts * scale).astype('float32')
-        r[..., 1] += rotation_center_shift * scale
+        r[..., 1] += rotation_center_shift * scale + 0.5 * (scale - 1)
         r_gpu = cp.array(r)
 
         # Ref for this bin level (rank 0 → Bcast)

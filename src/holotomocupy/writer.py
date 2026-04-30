@@ -12,7 +12,7 @@ class Writer:
     Uses parallel HDF5 (mpio driver). All ranks open the file collectively;
     obj and pos are written with collective I/O; prb is written by rank 0 only.
 
-    File layout — {path_out}/checkpoint_{iter:04}.h5:
+    File layout — {path_out}/checkpoints/checkpoint_{iter:04}.h5:
       /obj_re  (nzobj, nobj, nobj)  float32 — real part of obj (assembled from all ranks)
       /obj_im  (nzobj, nobj, nobj)  float32 — imag part of obj (complex64 dtype only)
       /prb_abs   (ndist, nz, n)     float32 — probe amplitude (from rank 0)
@@ -43,9 +43,12 @@ class Writer:
         self.n         = n
         self.obj_dtype = obj_dtype
 
+        self.h5_dir   = os.path.join(path_out, 'checkpoints')
+        self.tiff_dir = os.path.join(path_out, 'checkpoints_tiff')
         if self.rank == 0:
-            os.makedirs(path_out, exist_ok=True)
-        comm.Barrier()  # ensure directory exists before other ranks proceed
+            os.makedirs(self.h5_dir,   exist_ok=True)
+            os.makedirs(self.tiff_dir, exist_ok=True)
+        comm.Barrier()  # ensure directories exist before other ranks proceed
 
     @staticmethod
     def _cpu(x):
@@ -67,7 +70,7 @@ class Writer:
         norm_const : float
             Normalisation constant — obj is multiplied by this before saving.
         """
-        path = os.path.join(self.path_out, f"checkpoint_{i:04}.h5")
+        path = os.path.join(self.h5_dir, f"checkpoint_{i:04}.h5")
 
         pos = self._cpu(vars['pos'])
         prb = self._cpu(vars['prb'])
@@ -116,7 +119,7 @@ class Writer:
             mid = self.nzobj // 2
             with h5py.File(path, 'r') as f:
                 slice_re = f['obj_re'][mid]
-            tiff_path = os.path.join(self.path_out, f"checkpoint_{i:04}_obj_re.tiff")
+            tiff_path = os.path.join(self.tiff_dir, f"checkpoint_{i:04}_obj_re.tiff")
             tifffile.imwrite(tiff_path, slice_re)
             logger.info(f"Writer: mid-slice TIFF saved → {tiff_path}")
         

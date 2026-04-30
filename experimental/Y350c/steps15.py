@@ -36,6 +36,7 @@ args = parse_args_steps15(sys.argv[1])
 start_step            = args.start_step
 rotation_center_shift = args.rotation_center_shift
 nlevels               = args.nlevels
+start_level_rec       = args.start_level_rec
 paganin               = args.paganin
 nchunk                = args.nchunk
 ref_dist              = args.ref_dist
@@ -644,19 +645,16 @@ else:
             pass
     comm.Barrier()
 
-    for bin in range(nlevels):
+    for bin in range(start_level_rec, nlevels):
         n_bin         = n // (2**bin)
         nobj_bin      = nobj // (2**bin)
         voxelsize_bin = voxelsize * (2**bin)
         if rank == 0:
             logger.info(f'Step 5: bin={bin}  n_bin={n_bin}  nobj_bin={nobj_bin}  voxelsize={voxelsize_bin*1e9:.3f} nm')
 
-        # Rotation centre shift recursively adjusted for bin level
-        s = rotation_center_shift
-        for _ in range(bin):
-            s = (s - 0.5) / 2
-        r     = (cshifts / 2**bin).astype('float32')
-        r[..., 1] += s
+        scale = 1.0 / 2**bin
+        r     = (cshifts * scale).astype('float32')
+        r[..., 1] += rotation_center_shift * scale + 0.5 * (scale - 1)
         r_gpu = cp.array(r)
 
         # Ref for this bin level (rank 0 → Bcast)
