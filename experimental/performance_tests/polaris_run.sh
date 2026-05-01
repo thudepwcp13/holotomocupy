@@ -29,7 +29,7 @@ cp "${SCRIPT_DIR}"/*.py   "${scripts_dir}/" 2>/dev/null || true
 cp "${SCRIPT_DIR}"/*.conf "${scripts_dir}/" 2>/dev/null || true
 
 cd "${rec_dir}"
-exec > >(tee "${scripts_dir}/pbs.out" "${SCRIPT_DIR}/pbs.out") 2>&1
+exec > >(tee "${scripts_dir}/slurm-${PBS_JOBID}.out" "${SCRIPT_DIR}/slurm-${PBS_JOBID}.out") 2>&1
 
 echo "Sample dir:  ${SCRIPT_DIR}"
 echo "Rec dir:     ${rec_dir}"
