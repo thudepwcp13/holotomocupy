@@ -27,6 +27,8 @@ SAMPLE_DIR="$(cd "${SCRIPT_DIR}/${SAMPLE_DIR}" && pwd)"
 rec_dir=$(grep -E '^\s*path_out\s*=' "${SAMPLE_DIR}/${CONFIG}" | head -1 \
           | sed 's/[^=]*=\s*//' | sed 's/\s*#.*//' | tr -d ' ')
 
+mkdir -p "${rec_dir}"
+
 # scripts_dir is a dated snapshot folder inside rec_dir
 scripts_dir="${rec_dir}/scripts$(date +%Y-%m-%d_%H-%M-%S)"
 mkdir -p "${scripts_dir}"
