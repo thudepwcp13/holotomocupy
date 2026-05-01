@@ -136,6 +136,12 @@ __device__ __forceinline__ float phi(float t)
     if ( 1.0f < t && t <=  2.0f) return (2.0f - t) * (2.0f - t) * (2.0f - t);
     return 0.0f;
 }
+__device__ __forceinline__ int sym_idx(int i, int N)
+{
+    if (i < 0)   i = -i;
+    if (i >= N)  i = 2*N - 2 - i;
+    return i;
+}
 """
 
 fun_dphi = r"""
@@ -194,17 +200,17 @@ void __global__ s(float2* g, float2* f, float* r, float* mag,
     for (int jy = -1; jy < 3; jy++)
     {
         int indy = iy + jy;
-        if (indy < 0 || indy >= nzpsi) continue;
+        int indy_s = sym_idx(indy, nzpsi);
         float pdym    = phi(dy - jy);
-        int   row_off = indy * npsi + tz_off;
+        int   row_off = indy_s * npsi + tz_off;
 
         for (int jx = -1; jx < 3; jx++)
         {
             int indx = ix + jx;
-            if (indx < 0 || indx >= npsi) continue;
+            int indx_s = sym_idx(indx, npsi);
 
             float w   = px[jx + 1] * pdym;
-            int   idx = indx + row_off;
+            int   idx = indx_s + row_off;
 
             if (dir == 0)
             {
@@ -263,17 +269,17 @@ void __global__ s(float* g, float* f, float* r, float* mag,
     for (int jy = -1; jy < 3; jy++)
     {
         int indy = iy + jy;
-        if (indy < 0 || indy >= nzpsi) continue;
+        int indy_s = sym_idx(indy, nzpsi);
         float pdym    = phi(dy - jy);
-        int   row_off = indy * npsi + tz_off;
+        int   row_off = indy_s * npsi + tz_off;
 
         for (int jx = -1; jx < 3; jx++)
         {
             int indx = ix + jx;
-            if (indx < 0 || indx >= npsi) continue;
+            int indx_s = sym_idx(indx, npsi);
 
             float w   = px[jx + 1] * pdym;
-            int   idx = indx + row_off;
+            int   idx = indx_s + row_off;
 
             if (dir == 0)
                 g0 += w * f[idx];
@@ -337,16 +343,16 @@ void __global__ sback(float2* g, float2* f, float* r, float* mag,
     for (int jy = -1; jy < 3; jy++)
     {
         int indy = iy + jy;
-        if (indy < 0 || indy >= nz) continue;
+        int indy_s = sym_idx(indy, nz);
         float pdym    = phi(dy - jy);
-        int   row_off = indy * n + tz_off;
+        int   row_off = indy_s * n + tz_off;
 
         for (int jx = -1; jx < 3; jx++)
         {
             int indx = ix + jx;
-            if (indx < 0 || indx >= n) continue;
+            int indx_s = sym_idx(indx, n);
             float w   = px[jx + 1] * pdym;
-            int   idx = indx + row_off;
+            int   idx = indx_s + row_off;
             g0.x += w * f[idx].x;
             g0.y += w * f[idx].y;
         }
@@ -414,17 +420,17 @@ void __global__ d2s(float2* res, float2* c, float2* c1, float2* c2, float* r, fl
     for (int jy = -1; jy < 3; jy++)
     {
         int indy = iy + jy;
-        if (indy < 0 || indy >= nzpsi) continue;
+        int indy_s = sym_idx(indy, nzpsi);
         float dym     = dy - jy;
         float pdym    = phi(dym);
         float dpdym   = dphi(dym);
         float d2pdym  = d2phi(dym);
-        int   row_off = indy * npsi + tz_off;
+        int   row_off = indy_s * npsi + tz_off;
 
         for (int jx = -1; jx < 3; jx++)
         {
             int indx = ix + jx;
-            if (indx < 0 || indx >= npsi) continue;
+            int indx_s = sym_idx(indx, npsi);
 
             float w  = d2px[jx + 1] * pdym    * Deltar1x * Deltar2x
                      + dpx[jx + 1]  * dpdym   * cross
@@ -433,7 +439,7 @@ void __global__ d2s(float2* res, float2* c, float2* c1, float2* c2, float* r, fl
                      + dpdym        * px[jx + 1] * Deltar1y;
             float w2 = dpx[jx + 1] * pdym  * Deltar2x
                      + dpdym        * px[jx + 1] * Deltar2y;
-            int idx = indx + row_off;
+            int idx = indx_s + row_off;
             r0.x += w  * c[idx].x;
             r0.y += w  * c[idx].y;
             r0.x -= w1 * c1[idx].x;
@@ -499,17 +505,17 @@ void __global__ d2s(float* res, float* c, float* c1, float* c2, float* r, float*
     for (int jy = -1; jy < 3; jy++)
     {
         int indy = iy + jy;
-        if (indy < 0 || indy >= nzpsi) continue;
+        int indy_s = sym_idx(indy, nzpsi);
         float dym    = dy - jy;
         float pdym   = phi(dym);
         float dpdym  = dphi(dym);
         float d2pdym = d2phi(dym);
-        int   row_off = indy * npsi + tz_off;
+        int   row_off = indy_s * npsi + tz_off;
 
         for (int jx = -1; jx < 3; jx++)
         {
             int indx = ix + jx;
-            if (indx < 0 || indx >= npsi) continue;
+            int indx_s = sym_idx(indx, npsi);
 
             float w  = d2px[jx + 1] * pdym   * Deltar1x * Deltar2x
                      + dpx[jx + 1]  * dpdym  * cross
@@ -519,7 +525,7 @@ void __global__ d2s(float* res, float* c, float* c1, float* c2, float* r, float*
             float w2 = dpx[jx + 1] * pdym       * Deltar2x
                      + dpdym        * px[jx + 1] * Deltar2y;
 
-            int idx = indx + row_off;
+            int idx = indx_s + row_off;
             r0 += w  * c[idx];
             r0 -= w1 * c1[idx];
             r0 -= w2 * c2[idx];
@@ -578,22 +584,22 @@ void __global__ ds(float2* res, float2* c, float2* c1, float* r, float* mag, flo
     for (int jy = -1; jy < 3; jy++)
     {
         int indy = iy + jy;
-        if (indy < 0 || indy >= nzpsi) continue;
+        int indy_s = sym_idx(indy, nzpsi);
         float dym     = dy - jy;
         float pdym    = phi(dym);
         float dpdym   = dphi(dym);
-        int   row_off = indy * npsi + tz_off;
+        int   row_off = indy_s * npsi + tz_off;
 
         for (int jx = -1; jx < 3; jx++)
         {
             int indx = ix + jx;
-            if (indx < 0 || indx >= npsi) continue;
+            int indx_s = sym_idx(indx, npsi);
 
             float w   = dpx[jx + 1] * pdym  * Deltarx
                       + dpdym        * px[jx + 1] * Deltary;
             float w1  = px[jx + 1] * pdym;
 
-            int   idx = indx + row_off;
+            int   idx = indx_s + row_off;
             r0.x -= w * c[idx].x;
             r0.y -= w * c[idx].y;
             r0.x += w1 * c1[idx].x;
@@ -651,21 +657,21 @@ void __global__ ds(float* res, float* c, float* c1, float* r, float* mag, float*
     for (int jy = -1; jy < 3; jy++)
     {
         int indy = iy + jy;
-        if (indy < 0 || indy >= nzpsi) continue;
+        int indy_s = sym_idx(indy, nzpsi);
         float dym     = dy - jy;
         float pdym    = phi(dym);
         float dpdym   = dphi(dym);
-        int   row_off = indy * npsi + tz_off;
+        int   row_off = indy_s * npsi + tz_off;
 
         for (int jx = -1; jx < 3; jx++)
         {
             int indx = ix + jx;
-            if (indx < 0 || indx >= npsi) continue;
+            int indx_s = sym_idx(indx, npsi);
 
             float w   = dpx[jx + 1] * pdym       * Deltarx
                       + dpdym        * px[jx + 1] * Deltary;
             float w1  = px[jx + 1] * pdym;
-            int   idx = indx + row_off;
+            int   idx = indx_s + row_off;
             r0 -= w  * c[idx];
             r0 += w1 * c1[idx];
         }
@@ -722,20 +728,20 @@ void __global__ dsadj(float2* f, float2* dt1, float2* dt2, float2* c, float2 *g,
     for (int jy = -1; jy < 3; jy++)
     {
         int indy = iy + jy;
-        if (indy < 0 || indy >= nzpsi) continue;
+        int indy_s = sym_idx(indy, nzpsi);
         float dym     = dy - jy;
         float pdym    = phi(dym);
         float dpdym   = dphi(dym);
-        int   row_off = indy * npsi + tz_off;
+        int   row_off = indy_s * npsi + tz_off;
 
         for (int jx = -1; jx < 3; jx++)
         {
             int indx = ix + jx;
-            if (indx < 0 || indx >= npsi) continue;
+            int indx_s = sym_idx(indx, npsi);
 
             float w1  = -dpdym       * px[jx + 1];
             float w2  = -dpx[jx + 1] * pdym;
-            int   idx = indx + row_off;
+            int   idx = indx_s + row_off;
 
             dt10.x += w1 * c[idx].x;
             dt10.y += w1 * c[idx].y;
@@ -802,20 +808,20 @@ void __global__ dsadj(float* f, float* dt1, float* dt2, float* c, float* g, floa
     for (int jy = -1; jy < 3; jy++)
     {
         int indy = iy + jy;
-        if (indy < 0 || indy >= nzpsi) continue;
+        int indy_s = sym_idx(indy, nzpsi);
         float dym     = dy - jy;
         float pdym    = phi(dym);
         float dpdym   = dphi(dym);
-        int   row_off = indy * npsi + tz_off;
+        int   row_off = indy_s * npsi + tz_off;
 
         for (int jx = -1; jx < 3; jx++)
         {
             int indx = ix + jx;
-            if (indx < 0 || indx >= npsi) continue;
+            int indx_s = sym_idx(indx, npsi);
 
             float w1  = -dpdym       * px[jx + 1];
             float w2  = -dpx[jx + 1] * pdym;
-            int   idx = indx + row_off;
+            int   idx = indx_s + row_off;
             float cv  = c[idx];
             dt10 += w1 * cv;
             dt20 += w2 * cv;
@@ -832,43 +838,4 @@ void __global__ dsadj(float* f, float* dt1, float* dt2, float* c, float* g, floa
 }
 """,
     "dsadj",
-)
-
-
-
-window_mask_kernel = cp.RawKernel(
-    r"""
-extern "C" __global__ void window_mask(
-    float* arr,
-    const float* pos,    // [ntheta, ndist, 2]  r_y=pos[...,0], r_x=pos[...,1]
-    const float* eff,    // [ntheta, ndist]
-    int nzobj, int nobj, int nz, int n, int ndist, int ntheta,
-    int stride           // 1 for float32, 2 for complex64
-)
-{
-    int tx = blockDim.x * blockIdx.x + threadIdx.x;  // detector x in [0, n)
-    int ty = blockDim.y * blockIdx.y + threadIdx.y;  // detector y in [0, nz)
-    int tk = blockIdx.z;                              // flattened theta*ndist
-
-    int th = tk / ndist;
-    int k  = tk % ndist;
-
-    if (tx >= n || ty >= nz || th >= ntheta) return;
-
-    float r_y = pos[th * ndist * 2 + k * 2 + 0];
-    float r_x = pos[th * ndist * 2 + k * 2 + 1];
-    float m   = eff[th * ndist + k];
-
-    int ty_s = max(0,   (int)((-nzobj * 0.5f + r_y - 0.5f) / m + nz * 0.5f) + 5);
-    int ty_e = min(nz,  (int)(( nzobj * 0.5f + r_y - 0.5f) / m + nz * 0.5f) - 1 - 5);
-    int tx_s = max(0,   (int)((-nobj  * 0.5f + r_x - 0.5f) / m + n  * 0.5f) + 5);
-    int tx_e = min(n,   (int)(( nobj  * 0.5f + r_x - 0.5f) / m + n  * 0.5f) - 1 - 5);
-
-    if (ty < ty_s || ty >= ty_e || tx < tx_s || tx >= tx_e) {
-        int idx = stride * (th * ndist * nz * n + k * nz * n + ty * n + tx);
-        for (int s = 0; s < stride; s++) arr[idx + s] = 0.0f;
-    }
-}
-""",
-    "window_mask",
 )

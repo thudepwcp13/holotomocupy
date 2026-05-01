@@ -1,4 +1,3 @@
-import math
 import numpy as np
 import cupy as cp
 import os
@@ -14,7 +13,6 @@ from .utils import *
 from .mpi_functions import *
 from .logger_config import logger
 from .conv2d_cufftdx import precompile as cufftdx_precompile
-from .cuda_kernels import window_mask_kernel
 
 np.set_printoptions(legacy="1.25")
 warnings.filterwarnings("ignore", message=f".*peer.*")
@@ -265,12 +263,11 @@ class Rec:
 
         @self.gpu_batch(axis_out=0, axis_inp=0,nout=1)
         def _hessian_cascade(
-            self, out, d, pos_init, eff_demag,
+            self, out, d, eff_demag,
             x2, y2, z2,
             x1, y1, z1,
             x0, y0, z0,
         ):
-            self._pos_init_chunk  = pos_init
             self._eff_demag_chunk = eff_demag
             # reorganize inputs into ordered lists for cascade traversal
             x = [x0, x1, x2]
@@ -298,7 +295,7 @@ class Rec:
 
 
         _hessian_cascade(
-            self, out, self.data, self.pos_init, self.eff_demagnifications,
+            self, out, self.data, self.eff_demagnifications,
             vars["pos"], grads["pos"], etas["pos"],
             vars["proj"], grads["proj"], etas["proj"],
             vars["prb"], grads["prb"], etas["prb"],### reordered to keep syntax for the gpu_batch (last 4 are on gpu)
@@ -342,8 +339,7 @@ class Rec:
         # part1, parallelization over angles
         grads['prb'][:] = 0
         @self.gpu_batch(axis_out=0, axis_inp=0, nout=3)
-        def _gradients_cascade(self,gradproj,gradpos,gradprb,d,pos_init,eff_demag,proj,pos,prb):
-            self._pos_init_chunk  = pos_init
+        def _gradients_cascade(self,gradproj,gradpos,gradprb,d,eff_demag,proj,pos,prb):
             self._eff_demag_chunk = eff_demag
             x = [prb, proj, pos]
             y = d
@@ -355,7 +351,7 @@ class Rec:
             gradproj[:] = y[1]*self.rho_sq['obj']
             gradpos[:] = y[2]*self.rho_sq['pos']
 
-        _gradients_cascade(self,grads['proj'],grads['pos'],grads['prb'],self.data,self.pos_init,self.eff_demagnifications,vars["proj"],vars["pos"],vars["prb"])
+        _gradients_cascade(self,grads['proj'],grads['pos'],grads['prb'],self.data,self.eff_demagnifications,vars["proj"],vars["pos"],vars["prb"])
         
     @timer
     def gF4(self, gradu, gradproj):
@@ -519,20 +515,6 @@ class Rec:
     #######################################################################################
 
 
-    def _apply_window_mask(self, arr, pos_chunk, eff_chunk):
-        """Zero arr[th,k,...] outside the valid detector window derived from pos_init."""
-        ntheta = arr.shape[0]
-        stride = 2 if arr.dtype == cp.complex64 else 1
-        arr_f  = arr.view('float32') if stride == 2 else arr
-        pos_c  = cp.ascontiguousarray(pos_chunk)
-        eff_c  = cp.ascontiguousarray(eff_chunk)
-        window_mask_kernel(
-            (math.ceil(self.n / 16), math.ceil(self.nz / 16), ntheta * self.ndist),
-            (16, 16, 1),
-            (arr_f, pos_c, eff_c,
-             self.nzobj, self.nobj, self.nz, self.n, self.ndist, ntheta, stride),
-        )
-
     ####### F0(x0) = 1/n\||x0|-d\|_2^2
     @staticmethod
     @cp.fuse()
@@ -543,9 +525,7 @@ class Rec:
     @nvtx.annotate("F0", color="green")
     def F0(self, x, d):
         """In: (x0), Out: const"""
-        result = self._F0_fused(x, d)
-        self._apply_window_mask(result, self._pos_init_chunk, self._eff_demag_chunk)
-        return 1 / self.data_size * cp.sum(result)
+        return 1 / self.data_size * cp.sum(self._F0_fused(x, d))
 
     @staticmethod
     @cp.fuse()
@@ -571,9 +551,7 @@ class Rec:
     @nvtx.annotate("d2F0_dF0", color="purple")
     def d2F_dF0(self, x, y, z, w, d):
         """In: (x0,y0,z0,w0), Out: const"""
-        result = self._d2F_dF0_fused(x, y, z, w, d)
-        self._apply_window_mask(result, self._pos_init_chunk, self._eff_demag_chunk)
-        return 2 / self.data_size * cp.sum(result)
+        return 2 / self.data_size * cp.sum(self._d2F_dF0_fused(x, y, z, w, d))
         
     @staticmethod
     @cp.fuse()
@@ -589,9 +567,7 @@ class Rec:
         for id in range(1, 4)[::-1]:
             x = self.F[id](x)
 
-        result = self._gF0_fused(x, y, np.float32(2 / self.data_size))
-        self._apply_window_mask(result, self._pos_init_chunk, self._eff_demag_chunk)
-        return result
+        return self._gF0_fused(x, y, np.float32(2 / self.data_size))
     
     ####### x0 = F1(x11,x12) = D(x11\cdot x12)
     @nvtx.annotate("F1", color="green")
@@ -842,8 +818,7 @@ class Rec:
         out = cp.zeros(1, dtype="float32")
 
         @self.gpu_batch(axis_out=0, axis_inp=0, nout=1)
-        def _min(self, out, proj, pos, data, pos_init, eff_demag, prb):
-            self._pos_init_chunk  = pos_init
+        def _min(self, out, proj, pos, data, eff_demag, prb):
             self._eff_demag_chunk = eff_demag
             x = [prb, proj, pos]
             y = x
@@ -851,7 +826,7 @@ class Rec:
                 y = self.F[id](y)
             out[:] += self.F0(y, data)
 
-        _min(self, out, proj, pos, self.data, self.pos_init, self.eff_demagnifications, prb)
+        _min(self, out, proj, pos, self.data, self.eff_demagnifications, prb)
 
         out = out[0]
 
