@@ -747,14 +747,13 @@ else:
         with h5py.File(fpath_srdata, 'a', driver='mpio', comm=comm) as fid_srdata:
             srdata_ds = fid_srdata.create_dataset(
                 f'/exchange/srdata_bin{bin}',
-                shape=(ndist, nobj_bin, nobj_bin),
+                shape=(ntheta, ndist, nobj_bin, nobj_bin),
                 dtype='float32',
             )
             with h5py.File(fpath) as fid:
                 for i, j in enumerate(local_ids):
                     _stitch(fid, srdata, j)
-                    if j == 0:
-                        srdata_ds[:] = srdata.get()
+                    srdata_ds[j] = srdata.get()
                     pj  = cp.array(srdata)
                     pj  = cp.pad(pj, ((0, 0), (pad8, pad8), (pad8, pad8)), 'reflect')
                     phase = multiPaganin(pj, distances * (1 + shrink_nd[j, :])**2 / norm_magnifications**2, wavelength, voxelsize_bin, paganin, 0.01)

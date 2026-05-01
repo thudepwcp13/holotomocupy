@@ -834,3 +834,41 @@ void __global__ dsadj(float* f, float* dt1, float* dt2, float* c, float* g, floa
     "dsadj",
 )
 
+
+
+window_mask_kernel = cp.RawKernel(
+    r"""
+extern "C" __global__ void window_mask(
+    float* arr,
+    const float* pos,    // [ntheta, ndist, 2]  r_y=pos[...,0], r_x=pos[...,1]
+    const float* eff,    // [ntheta, ndist]
+    int nzobj, int nobj, int nz, int n, int ndist, int ntheta,
+    int stride           // 1 for float32, 2 for complex64
+)
+{
+    int tx = blockDim.x * blockIdx.x + threadIdx.x;  // detector x in [0, n)
+    int ty = blockDim.y * blockIdx.y + threadIdx.y;  // detector y in [0, nz)
+    int tk = blockIdx.z;                              // flattened theta*ndist
+
+    int th = tk / ndist;
+    int k  = tk % ndist;
+
+    if (tx >= n || ty >= nz || th >= ntheta) return;
+
+    float r_y = pos[th * ndist * 2 + k * 2 + 0];
+    float r_x = pos[th * ndist * 2 + k * 2 + 1];
+    float m   = eff[th * ndist + k];
+
+    int ty_s = max(0,   (int)((-nzobj * 0.5f + r_y - 0.5f) / m + nz * 0.5f) + 2);
+    int ty_e = min(nz,  (int)(( nzobj * 0.5f + r_y - 0.5f) / m + nz * 0.5f) - 1);
+    int tx_s = max(0,   (int)((-nobj  * 0.5f + r_x - 0.5f) / m + n  * 0.5f) + 2);
+    int tx_e = min(n,   (int)(( nobj  * 0.5f + r_x - 0.5f) / m + n  * 0.5f) - 1);
+
+    if (ty < ty_s || ty >= ty_e || tx < tx_s || tx >= tx_e) {
+        int idx = stride * (th * ndist * nz * n + k * nz * n + ty * n + tx);
+        for (int s = 0; s < stride; s++) arr[idx + s] = 0.0f;
+    }
+}
+""",
+    "window_mask",
+)

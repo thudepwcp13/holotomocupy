@@ -57,7 +57,7 @@ class Writer:
             return x.get()
         return np.asarray(x)
 
-    def write_checkpoint(self, vars, i, norm_const):
+    def write_checkpoint(self, vars, i, norm_const, residual=None):
         """Save obj, prb, pos for iteration i to an HDF5 checkpoint file.
 
         Parameters
@@ -88,6 +88,8 @@ class Writer:
             prb_shape = (self.ndist, self.nz, self.n)
             ds_prb_abs   = f.create_dataset('prb_abs',   shape=prb_shape, dtype='float32')
             ds_prb_phase = f.create_dataset('prb_phase', shape=prb_shape, dtype='float32')
+            if residual is not None:
+                ds_res = f.create_dataset('residual', shape=(self.ntheta, self.ndist, self.nz, self.n), dtype='float32')
 
             # Write obj in z-batches: avoids a full [local_nzobj, nobj, nobj] copy.
             # np.multiply(src, scalar, out=slab_buf) is zero-allocation per batch.
@@ -106,6 +108,8 @@ class Writer:
             del slab_buf
 
             ds_pos[self.st_theta:self.end_theta] = pos
+            if residual is not None:
+                ds_res[self.st_theta:self.end_theta] = residual
 
         # prb written by rank 0 only via serial driver after mpio block closes
         self.comm.Barrier()

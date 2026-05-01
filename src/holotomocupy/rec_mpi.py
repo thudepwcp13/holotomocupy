@@ -13,6 +13,7 @@ from .utils import *
 from .mpi_functions import *
 from .logger_config import logger
 from .conv2d_cufftdx import precompile as cufftdx_precompile
+from .cuda_kernels import window_mask_kernel
 
 np.set_printoptions(legacy="1.25")
 warnings.filterwarnings("ignore", message=f".*peer.*")
@@ -151,7 +152,7 @@ class Rec:
             vars["obj"]*=self.cl_tomo.mask
         
         self.pos_init = vars['pos'].copy()
-        
+
         # precalculate proj             
         self.fwd_tomo(vars["obj"],out = proj_tmp)                    
         self.redist(proj_tmp, vars['proj'])
@@ -263,24 +264,26 @@ class Rec:
 
         @self.gpu_batch(axis_out=0, axis_inp=0,nout=1)
         def _hessian_cascade(
-            self, out, d,
-            x2, y2, z2, 
-            x1, y1, z1, 
-            x0, y0, z0, 
-        ):            
+            self, out, d, pos_init, eff_demag,
+            x2, y2, z2,
+            x1, y1, z1,
+            x0, y0, z0,
+        ):
+            self._pos_init_chunk  = pos_init
+            self._eff_demag_chunk = eff_demag
             # reorganize inputs into ordered lists for cascade traversal
             x = [x0, x1, x2]
             y = [y0, y1, y2]
             z = [z0, z1, z2]
             w = [None,None,None]
-            
+
             # check whether y and z share same object (avoid duplicate work)
             y_is_z = y[0] is z[0]
 
             for id in range(1,len(self.F))[::-1]:
-                # compute d2F(dFy,dFz)+dF(d2F(y,z))                                
-                w = self.d2F_dF[id](x, y, z, w)                        
-                
+                # compute d2F(dFy,dFz)+dF(d2F(y,z))
+                w = self.d2F_dF[id](x, y, z, w)
+
                 # propagate differentials to the next level: fx, dF(x)(y)
                 fx, y = self.dF[id](x, y)  # returns (fx, dfx(y))
                 if y_is_z:
@@ -292,9 +295,9 @@ class Rec:
             # outer functional
             out[:] += self.d2F_dF[0](x, y, z, w, d)
 
-            
+
         _hessian_cascade(
-            self, out, self.data,
+            self, out, self.data, self.pos_init, self.eff_demagnifications,
             vars["pos"], grads["pos"], etas["pos"],
             vars["proj"], grads["proj"], etas["proj"],
             vars["prb"], grads["prb"], etas["prb"],### reordered to keep syntax for the gpu_batch (last 4 are on gpu)
@@ -338,19 +341,20 @@ class Rec:
         # part1, parallelization over angles
         grads['prb'][:] = 0
         @self.gpu_batch(axis_out=0, axis_inp=0, nout=3)
-        def _gradients_cascade(self,gradproj,gradpos,gradprb,d,proj,pos,prb):            
-
+        def _gradients_cascade(self,gradproj,gradpos,gradprb,d,pos_init,eff_demag,proj,pos,prb):
+            self._pos_init_chunk  = pos_init
+            self._eff_demag_chunk = eff_demag
             x = [prb, proj, pos]
-            y = d 
+            y = d
             # compute gradient by applying operators in forward order
             for id in range(len(self.gF)):  #last one computed separately because of different chunking
-                y = self.gF[id](x,y)                           
+                y = self.gF[id](x,y)
             # move variable scaling here to avoid additional data transfers
             gradprb[:] += y[0]*self.rho_sq['prb']
             gradproj[:] = y[1]*self.rho_sq['obj']
             gradpos[:] = y[2]*self.rho_sq['pos']
 
-        _gradients_cascade(self,grads['proj'],grads['pos'],grads['prb'],self.data,vars["proj"],vars["pos"],vars["prb"])
+        _gradients_cascade(self,grads['proj'],grads['pos'],grads['prb'],self.data,self.pos_init,self.eff_demagnifications,vars["proj"],vars["pos"],vars["prb"])
         
     @timer
     def gF4(self, gradu, gradproj):
@@ -514,6 +518,21 @@ class Rec:
     #######################################################################################
 
 
+    def _apply_window_mask(self, arr, pos_chunk, eff_chunk):
+        """Zero arr[th,k,...] outside the valid detector window derived from pos_init."""
+        import math
+        ntheta = arr.shape[0]
+        stride = 2 if arr.dtype == cp.complex64 else 1
+        arr_f  = arr.view('float32') if stride == 2 else arr
+        pos_c  = cp.ascontiguousarray(cp.asarray(pos_chunk).astype('float32'))
+        eff_c  = cp.ascontiguousarray(cp.asarray(eff_chunk).astype('float32'))
+        window_mask_kernel(
+            (math.ceil(self.n / 16), math.ceil(self.nz / 16), ntheta * self.ndist),
+            (16, 16, 1),
+            (arr_f, pos_c, eff_c,
+             self.nzobj, self.nobj, self.nz, self.n, self.ndist, ntheta, stride),
+        )
+
     ####### F0(x0) = 1/n\||x0|-d\|_2^2
     @staticmethod
     @cp.fuse()
@@ -524,7 +543,9 @@ class Rec:
     @nvtx.annotate("F0", color="green")
     def F0(self, x, d):
         """In: (x0), Out: const"""
-        return 1 / self.data_size * cp.sum(self._F0_fused(x, d))
+        result = self._F0_fused(x, d)
+        self._apply_window_mask(result, self._pos_init_chunk, self._eff_demag_chunk)
+        return 1 / self.data_size * cp.sum(result)
 
     @staticmethod
     @cp.fuse()
@@ -550,7 +571,9 @@ class Rec:
     @nvtx.annotate("d2F0_dF0", color="purple")
     def d2F_dF0(self, x, y, z, w, d):
         """In: (x0,y0,z0,w0), Out: const"""
-        return 2 / self.data_size * cp.sum(self._d2F_dF0_fused(x, y, z, w, d))
+        result = self._d2F_dF0_fused(x, y, z, w, d)
+        self._apply_window_mask(result, self._pos_init_chunk, self._eff_demag_chunk)
+        return 2 / self.data_size * cp.sum(result)
         
     @staticmethod
     @cp.fuse()
@@ -566,7 +589,9 @@ class Rec:
         for id in range(1, 4)[::-1]:
             x = self.F[id](x)
 
-        return self._gF0_fused(x, y, np.float32(2 / self.data_size))
+        result = self._gF0_fused(x, y, np.float32(2 / self.data_size))
+        self._apply_window_mask(result, self._pos_init_chunk, self._eff_demag_chunk)
+        return result
     
     ####### x0 = F1(x11,x12) = D(x11\cdot x12)
     @nvtx.annotate("F1", color="green")
@@ -733,7 +758,7 @@ class Rec:
         x22 = cp.empty([len(x33), self.ndist, self.nz, self.n], dtype=self.obj_dtype)
         c = self.cl_shift.coeff(x32)
         for k in range(self.ndist):
-            x22[:, k] = self.cl_shift.curlySc(c, x33[:, k], self.eff_demagnifications[:, k])
+            x22[:, k] = self.cl_shift.curlySc(c, x33[:, k], self._eff_demag_chunk[:, k])
 
         x21 = x31
         return [x21, x22]
@@ -751,10 +776,10 @@ class Rec:
         if return_x:
             x22 = cp.zeros([len(x32), self.ndist, self.nz, self.n], dtype=self.obj_dtype)
             for k in range(self.ndist):
-                x22[:, k] = self.cl_shift.curlySc(c, x33[:, k], self.eff_demagnifications[:, k])
+                x22[:, k] = self.cl_shift.curlySc(c, x33[:, k], self._eff_demag_chunk[:, k])
 
         for k in range(self.ndist):
-            y22[:, k] = self.cl_shift.dcurlySc(c, x33[:, k], self.eff_demagnifications[:, k], c1, y33[:, k])
+            y22[:, k] = self.cl_shift.dcurlySc(c, x33[:, k], self._eff_demag_chunk[:, k], c1, y33[:, k])
 
         x21 = x31
         y21 = y31
@@ -776,12 +801,12 @@ class Rec:
         cy = self.cl_shift.coeff(y32)
         cz = self.cl_shift.coeff(z32)
         for k in range(self.ndist):
-            y22[:, k] = self.cl_shift.d2curlySc(c, x33[:, k], self.eff_demagnifications[:, k], cy, y33[:, k], cz, z33[:, k])
+            y22[:, k] = self.cl_shift.d2curlySc(c, x33[:, k], self._eff_demag_chunk[:, k], cy, y33[:, k], cz, z33[:, k])
 
         if w32 is not None:
             cy = self.cl_shift.coeff(w32)
             for k in range(self.ndist):
-                y22[:, k] += self.cl_shift.dcurlySc(c, x33[:, k], self.eff_demagnifications[:, k], cy, w33[:, k])
+                y22[:, k] += self.cl_shift.dcurlySc(c, x33[:, k], self._eff_demag_chunk[:, k], cy, w33[:, k])
 
         y21 = w31
 
@@ -801,7 +826,7 @@ class Rec:
         y33 = cp.empty([y22.shape[0], self.ndist, 2], dtype="float32")
         c = self.cl_shift.coeff(x32)
         for k in range(self.ndist):
-            Deltapsi, Deltar = self.cl_shift.dcurlySadjc(c, x33[:, k], self.eff_demagnifications[:, k], y22[:, k])
+            Deltapsi, Deltar = self.cl_shift.dcurlySadjc(c, x33[:, k], self._eff_demag_chunk[:, k], y22[:, k])
             y32[:] += Deltapsi
             y33[:, k] = Deltar
 
@@ -817,14 +842,16 @@ class Rec:
         out = cp.zeros(1, dtype="float32")
 
         @self.gpu_batch(axis_out=0, axis_inp=0, nout=1)
-        def _min(self, out, proj, pos, data, prb):
+        def _min(self, out, proj, pos, data, pos_init, eff_demag, prb):
+            self._pos_init_chunk  = pos_init
+            self._eff_demag_chunk = eff_demag
             x = [prb, proj, pos]
             y = x
             for id in range(1, len(self.F))[::-1]:
                 y = self.F[id](y)
             out[:] += self.F0(y, data)
 
-        _min(self, out, proj, pos, self.data, prb)
+        _min(self, out, proj, pos, self.data, self.pos_init, self.eff_demagnifications, prb)
 
         out = out[0]
 
@@ -840,23 +867,28 @@ class Rec:
             return
         if writer is not None:
             if i > self.start_iter:
-                writer.write_checkpoint(vars, i, self.norm_const)
+                residual = self.compute_residual(vars)
+                writer.write_checkpoint(vars, i, self.norm_const, residual=residual)
         else:
             mshow_complex(vars['obj'][self.local_nzobj//2],True)
             mshow_polar(vars['prb'][0],True)
             mshow_pos(vars['pos']-self.pos_init,True)
 
         if writer is not None and i > self.start_iter:
-            delta = cp.asnumpy(vars['pos'] - self.pos_init)   # [local_ntheta, ndist, 2]
-            abs_local = np.sum(np.abs(delta), axis=0)          # [ndist, 2]
-            abs_global = self.comm.allreduce(abs_local)
-            mean_err = abs_global / self.ntheta                # [ndist, 2]
+            delta      = cp.asnumpy(vars['pos'] - self.pos_init)        # [local_ntheta, ndist, 2]
+            all_deltas = self.cl_mpi.comm.gather(delta, root=0)
             if self.rank == 0:
+                all_delta = np.concatenate(all_deltas, axis=0)          # [ntheta, ndist, 2]
+                abs_delta = np.abs(all_delta)
+                mean_err  = abs_delta.mean(axis=0)                      # [ndist, 2]
+                std_err   = abs_delta.std(axis=0)
+                max_err   = abs_delta.max(axis=0)
                 parts = "  ".join(
-                    f"d{j}:({mean_err[j,0]:.4f},{mean_err[j,1]:.4f})"
+                    f"d{j}: y=({mean_err[j,0]:.4f}±{std_err[j,0]:.4f} max={max_err[j,0]:.4f})"
+                    f"  x=({mean_err[j,1]:.4f}±{std_err[j,1]:.4f} max={max_err[j,1]:.4f})"
                     for j in range(self.ndist)
                 )
-                logger.warning(f"iter={i}: pos mean abs error [px]  {parts}")
+                logger.warning(f"iter={i}: pos abs error [px]  {parts}")
             
     
     def error_debug(self, vars, i):
@@ -882,19 +914,32 @@ class Rec:
     def gen_sqrt_data(self, vars, out):
         """Generate synthetic data"""
 
-        vars["obj"] /= self.norm_const        
-        self.fwd_tomo(vars["obj"],out = self.proj_tmp)                    
+        vars["obj"] /= self.norm_const
+        self.fwd_tomo(vars["obj"],out = self.proj_tmp)
         self.redist(self.proj_tmp, vars['proj'])
         @self.gpu_batch(axis_out=0, axis_inp=0,nout=1)
         def _gen_data(self, out, proj, pos, prb):
             x = [prb, proj, pos]
             y = x  # forming output
             # compute functional by applying operators in reverse order
-            for id in range(1, len(self.F))[::-1]:  
-                y = self.F[id](y)                
+            for id in range(1, len(self.F))[::-1]:
+                y = self.F[id](y)
             out[:] = cp.abs(y)
-        _gen_data(self, out, vars['proj'], vars['pos'], vars['prb'])                  
-        vars["obj"] *= self.norm_const        
+        _gen_data(self, out, vars['proj'], vars['pos'], vars['prb'])
+        vars["obj"] *= self.norm_const
+
+    def compute_residual(self, vars):
+        """Return float32 numpy array [local_ntheta, ndist, nz, n]: |F(vars)| - sqrt(data)."""
+        res = np.empty([self.local_ntheta, self.ndist, self.nz, self.n], dtype='float32')
+        for theta_st in range(0, self.local_ntheta, self.nchunk):
+            theta_end = min(theta_st + self.nchunk, self.local_ntheta)
+            proj_ch = cp.array(vars['proj'][theta_st:theta_end])
+            pos_ch  = vars['pos'][theta_st:theta_end]
+            x = [vars['prb'], proj_ch, pos_ch]
+            for id in range(1, len(self.F))[::-1]:
+                x = self.F[id](x)
+            res[theta_st:theta_end] = cp.asnumpy(cp.abs(x)) - self.data[theta_st:theta_end]
+        return res
 
     def gen_sqrt_ref(self, prb, out):
         """Generate synthetic reference"""
