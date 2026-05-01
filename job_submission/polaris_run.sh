@@ -11,7 +11,6 @@
 # --- user configuration ---
 CONFIG=config_step6.conf
 SCRIPT=step6.py
-SAMPLE_DIR=../experimental/y350a_80um
 # --------------------------
 
 NNODES=$(wc -l < $PBS_NODEFILE)
@@ -21,31 +20,19 @@ NDEPTH=8
 export NTOTRANKS=$(( NNODES * NRANKS ))
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SAMPLE_DIR="$(cd "${SCRIPT_DIR}/${SAMPLE_DIR}" && pwd)"
 
 # rec_dir is path_out from the config file
-rec_dir=$(grep -E '^\s*path_out\s*=' "${SAMPLE_DIR}/${CONFIG}" | head -1 \
+rec_dir=$(grep -E '^\s*path_out\s*=' "${SCRIPT_DIR}/${CONFIG}" | head -1 \
           | sed 's/[^=]*=\s*//' | sed 's/\s*#.*//' | tr -d ' ')
-
 mkdir -p "${rec_dir}"
 
-# scripts_dir is a dated snapshot folder inside rec_dir
+# snapshot the current scripts folder into a dated copy
 scripts_dir="${rec_dir}/scripts$(date +%Y-%m-%d_%H-%M-%S)"
-mkdir -p "${scripts_dir}"
-
-# copy scripts, configs, affinity helper, and this job script into scripts_dir
-cp "${SAMPLE_DIR}"/*.py   "${scripts_dir}/" 2>/dev/null || true
-cp "${SAMPLE_DIR}"/*.conf "${scripts_dir}/" 2>/dev/null || true
-cp "$0"                   "${scripts_dir}/"
-cp "${SCRIPT_DIR}/set_affinity_gpu_polaris.sh" "${scripts_dir}/"
-
-# patch SAMPLE_DIR in the copied job script so reruns from scripts_dir are self-contained
-sed -i "s|^SAMPLE_DIR=.*|SAMPLE_DIR=${scripts_dir}|" "${scripts_dir}/$(basename "$0")"
+cp -r "${SCRIPT_DIR}" "${scripts_dir}"
 
 cd "${rec_dir}"
-exec > "${scripts_dir}/pbs.out" 2>&1
+exec > >(tee "${scripts_dir}/pbs.out" "pbs.out") 2>&1
 
-echo "Sample dir:  ${SAMPLE_DIR}"
 echo "Rec dir:     ${rec_dir}"
 echo "Scripts dir: ${scripts_dir}"
 echo "Jobid: $PBS_JOBID"
@@ -58,6 +45,6 @@ CONDA_NAME=$(echo ${CONDA_PREFIX} | tr '\/' '\t' | sed -E 's/mconda3|\/base//g' 
 VENV_DIR="/home/vvnikitin/venvs/${CONDA_NAME}"
 source "${VENV_DIR}/bin/activate"
 
-# mpiexec -n ${NTOTRANKS} --ppn ${NRANKS} --depth=${NDEPTH} --cpu-bind depth --env OMP_NUM_THREADS=${NTHREADS} ./set_affinity_gpu_polaris.sh python step0.py config_step0.conf
-mpiexec -n ${NTOTRANKS} --ppn ${NRANKS} --depth=${NDEPTH} --cpu-bind depth --env OMP_NUM_THREADS=${NTHREADS} ./set_affinity_gpu_polaris.sh python "${SCRIPT}" "${CONFIG}"
-# mpiexec -n ${NTOTRANKS} --ppn ${NRANKS} --depth=${NDEPTH} --cpu-bind depth --env OMP_NUM_THREADS=${NTHREADS} ./set_affinity_gpu_polaris.sh python steps15.py config_steps15.conf
+# mpiexec -n ${NTOTRANKS} --ppn ${NRANKS} --depth=${NDEPTH} --cpu-bind depth --env OMP_NUM_THREADS=${NTHREADS} "${scripts_dir}/set_affinity_gpu_polaris.sh" python "${scripts_dir}/step0.py" "${scripts_dir}/config_step0.conf"
+mpiexec -n ${NTOTRANKS} --ppn ${NRANKS} --depth=${NDEPTH} --cpu-bind depth --env OMP_NUM_THREADS=${NTHREADS} "${scripts_dir}/set_affinity_gpu_polaris.sh" python "${scripts_dir}/${SCRIPT}" "${scripts_dir}/${CONFIG}"
+# mpiexec -n ${NTOTRANKS} --ppn ${NRANKS} --depth=${NDEPTH} --cpu-bind depth --env OMP_NUM_THREADS=${NTHREADS} "${scripts_dir}/set_affinity_gpu_polaris.sh" python "${scripts_dir}/steps15.py" "${scripts_dir}/config_steps15.conf"
