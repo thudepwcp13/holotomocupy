@@ -859,10 +859,10 @@ extern "C" __global__ void window_mask(
     float r_x = pos[th * ndist * 2 + k * 2 + 1];
     float m   = eff[th * ndist + k];
 
-    int ty_s = max(0,   (int)((-nzobj * 0.5f + r_y - 0.5f) / m + nz * 0.5f) + 2);
-    int ty_e = min(nz,  (int)(( nzobj * 0.5f + r_y - 0.5f) / m + nz * 0.5f) - 1);
-    int tx_s = max(0,   (int)((-nobj  * 0.5f + r_x - 0.5f) / m + n  * 0.5f) + 2);
-    int tx_e = min(n,   (int)(( nobj  * 0.5f + r_x - 0.5f) / m + n  * 0.5f) - 1);
+    int ty_s = max(0,   (int)((-nzobj * 0.5f + r_y - 0.5f) / m + nz * 0.5f) + 5);
+    int ty_e = min(nz,  (int)(( nzobj * 0.5f + r_y - 0.5f) / m + nz * 0.5f) - 1 - 5);
+    int tx_s = max(0,   (int)((-nobj  * 0.5f + r_x - 0.5f) / m + n  * 0.5f) + 5);
+    int tx_e = min(n,   (int)(( nobj  * 0.5f + r_x - 0.5f) / m + n  * 0.5f) - 1 - 5);
 
     if (ty < ty_s || ty >= ty_e || tx < tx_s || tx >= tx_e) {
         int idx = stride * (th * ndist * nz * n + k * nz * n + ty * n + tx);

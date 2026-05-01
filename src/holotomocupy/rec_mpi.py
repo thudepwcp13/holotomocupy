@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import cupy as cp
 import os
@@ -134,7 +135,7 @@ class Rec:
         self.proj_tmp  = make_pinned([self.ntheta, self.local_nzobj, self.nobj], dtype=self.obj_dtype)
         
         self.shrink_nd = cp.zeros((self.local_ntheta, self.ndist), dtype='float32')
-        self.eff_demagnifications = self.shrink_nd #reuse memory
+        self.eff_demagnifications = cp.zeros((self.local_ntheta, self.ndist), dtype='float32')
 
     def BH(self, writer=None):
         # refs to preallocated memory for gradients                
@@ -520,12 +521,11 @@ class Rec:
 
     def _apply_window_mask(self, arr, pos_chunk, eff_chunk):
         """Zero arr[th,k,...] outside the valid detector window derived from pos_init."""
-        import math
         ntheta = arr.shape[0]
         stride = 2 if arr.dtype == cp.complex64 else 1
         arr_f  = arr.view('float32') if stride == 2 else arr
-        pos_c  = cp.ascontiguousarray(cp.asarray(pos_chunk).astype('float32'))
-        eff_c  = cp.ascontiguousarray(cp.asarray(eff_chunk).astype('float32'))
+        pos_c  = cp.ascontiguousarray(pos_chunk)
+        eff_c  = cp.ascontiguousarray(eff_chunk)
         window_mask_kernel(
             (math.ceil(self.n / 16), math.ceil(self.nz / 16), ntheta * self.ndist),
             (16, 16, 1),
