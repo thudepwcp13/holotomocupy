@@ -864,8 +864,25 @@ class Rec:
                     for j in range(self.ndist)
                 )
                 logger.warning(f"iter={i}: pos abs error [px]  {parts}")
-            
-    
+
+                import matplotlib.pyplot as plt
+                fig, axes = plt.subplots(self.ndist, 2, figsize=(10, 3 * self.ndist))
+                if self.ndist == 1:
+                    axes = axes[np.newaxis, :]
+                theta_idx = np.arange(self.ntheta)
+                for j in range(self.ndist):
+                    for d, label in enumerate(['y', 'x']):
+                        ax = axes[j, d]
+                        ax.plot(theta_idx, all_delta[:, j, d])
+                        ax.set_title(f"dist {j}, {label}")
+                        ax.set_xlabel("theta index")
+                        ax.set_ylabel("error [px]")
+                fig.tight_layout()
+                png_path = os.path.join(writer.path_out, f"pos_error_{i:04}.png")
+                fig.savefig(png_path, dpi=150)
+                plt.close(fig)
+                logger.info(f"pos error plot → {png_path}")
+
     def error_debug(self, vars, i):
         """Error logging and CSV checkpoint export."""
         if not (i % self.error_step == 0 and self.error_step != -1):
