@@ -19,8 +19,9 @@ extern "C" __global__ void gather(float2* g, float2* f, float* theta, int m, flo
     const float coeff1 = -PI * PI / mu0;
     const float inv_twon = 1.0f / ftwon;
 
-    const float x0 =  (tx - n / 2) / (float)n * __cosf(theta[ty]);
-    const float y0 = -(tx - n / 2) / (float)n * __sinf(theta[ty]);
+    const float cx  = (n - 1) * 0.5f;
+    const float x0 =  (tx - cx) / (float)n * __cosf(theta[ty]);
+    const float y0 = -(tx - cx) / (float)n * __sinf(theta[ty]);
 
     const int g_ind = tx + tz * n + ty * n * nz;  // swapped axes
     float2 g0 = (dir == 0) ? make_float2(0.0f, 0.0f) : g[g_ind];
@@ -343,16 +344,16 @@ void __global__ sback(float2* g, float2* f, float* r, float* mag,
     for (int jy = -1; jy < 3; jy++)
     {
         int indy = iy + jy;
-        int indy_s = sym_idx(indy, nz);
+        if (indy < 0 || indy >= nz) continue;
         float pdym    = phi(dy - jy);
-        int   row_off = indy_s * n + tz_off;
+        int   row_off = indy * n + tz_off;
 
         for (int jx = -1; jx < 3; jx++)
         {
             int indx = ix + jx;
-            int indx_s = sym_idx(indx, n);
+            if (indx < 0 || indx >= n) continue;
             float w   = px[jx + 1] * pdym;
-            int   idx = indx_s + row_off;
+            int   idx = indx + row_off;
             g0.x += w * f[idx].x;
             g0.y += w * f[idx].y;
         }

@@ -117,7 +117,7 @@ def read_nxtomo_meta(nx_path):
 def find_latest_checkpoint(path_out, start_iter):
     """Return the path to the most recent checkpoint in path_out, or None."""
     if start_iter > 0:
-        files = sorted(glob.glob(os.path.join(path_out, f'checkpoint_*{start_iter:04}.h5')))
+        files = sorted(glob.glob(os.path.join(path_out, 'checkpoints', f'checkpoint_*{start_iter:04}.h5')))
         return files[-1] if files else None
     else:
         return None
@@ -220,7 +220,7 @@ class Reader:
 
         scale = np.float32(1.0 / 2**self.bin)
         out *= scale
-        out[..., 1] += np.float32(self.rotation_center_shift * scale + 0.5 * (scale - 1))
+        out[..., 1] += np.float32(self.rotation_center_shift * scale)
         return out
 
     def read_shrink(self, out=None):
@@ -399,7 +399,6 @@ class Reader:
             pos = f['pos'][self.st_theta:self.end_theta].astype('float32')
 
         pos_up = pos * scale
-        pos_up[..., 1] += 0.5 * (scale - 1)
         if out_pos is None:
             out_pos = cp.array(pos_up)
         else:
@@ -425,7 +424,6 @@ class Reader:
             pos = f['pos'][self.ids][self.st_theta:self.end_theta].astype('float32')
 
         pos_up = pos * scale
-        pos_up[..., 1] += 0.5 * (scale - 1)
         if out is None:
             out = cp.array(pos_up)
         else:
