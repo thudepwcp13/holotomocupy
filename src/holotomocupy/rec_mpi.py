@@ -928,6 +928,7 @@ class Rec:
         res = np.empty([self.local_ntheta, self.ndist, self.nz, self.n], dtype='float32')
         for theta_st in range(0, self.local_ntheta, self.nchunk):
             theta_end = min(theta_st + self.nchunk, self.local_ntheta)
+            self._eff_demag_chunk = self.eff_demagnifications[theta_st:theta_end]
             proj_ch = cp.array(vars['proj'][theta_st:theta_end])
             pos_ch  = vars['pos'][theta_st:theta_end]
             x = [vars['prb'], proj_ch, pos_ch]
