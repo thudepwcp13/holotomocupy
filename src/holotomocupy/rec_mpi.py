@@ -879,7 +879,7 @@ class Rec:
                         ax.set_ylabel("error [px]")
                         ax.grid(True)
                 fig.tight_layout()
-                pos_err_dir = os.path.join(writer.h5_dir, "pos_errors")
+                pos_err_dir = os.path.join(writer.path_out, "pos_errors")
                 os.makedirs(pos_err_dir, exist_ok=True)
                 png_path = os.path.join(pos_err_dir, f"pos_error_{i:04}.png")
                 fig.savefig(png_path, dpi=150)
