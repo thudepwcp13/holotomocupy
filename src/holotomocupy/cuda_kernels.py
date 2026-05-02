@@ -182,9 +182,8 @@ void __global__ s(float2* g, float2* f, float* r, float* mag,
     if (tx >= n || ty >= nz || tz >= ntheta) return;
 
     const float mag0   = mag[tz];
-    const float half   = (mag0 - 1.0f) / 2.0f;
-    const float x      = (mag0 * (tx - n / 2) - r[2 * tz + 1] + half) + npsi  / 2;
-    const float y      = (mag0 * (ty - nz / 2) - r[2 * tz + 0] + half) + nzpsi / 2;
+    const float x      = mag0 * (tx - (n-1) * 0.5f) - r[2 * tz + 1] + (npsi-1) * 0.5f;
+    const float y      = mag0 * (ty - (nz-1) * 0.5f) - r[2 * tz + 0] + (nzpsi-1) * 0.5f;
     const int   ix     = (int)floorf(x);
     const int   iy     = (int)floorf(y);
     const float dx     = x - ix;
@@ -251,9 +250,8 @@ void __global__ s(float* g, float* f, float* r, float* mag,
     if (tx >= n || ty >= nz || tz >= ntheta) return;
 
     const float mag0   = mag[tz];
-    const float half   = (mag0 - 1.0f) / 2.0f;
-    const float x      = (mag0 * (tx - n / 2) - r[2 * tz + 1] + half) + npsi  / 2;
-    const float y      = (mag0 * (ty - nz / 2) - r[2 * tz + 0] + half) + nzpsi / 2;
+    const float x      = mag0 * (tx - (n-1) * 0.5f) - r[2 * tz + 1] + (npsi-1) * 0.5f;
+    const float y      = mag0 * (ty - (nz-1) * 0.5f) - r[2 * tz + 0] + (nzpsi-1) * 0.5f;
     const int   ix     = (int)floorf(x);
     const int   iy     = (int)floorf(y);
     const float dx     = x - ix;
@@ -326,9 +324,8 @@ void __global__ sback(float2* g, float2* f, float* r, float* mag,
     if (tx >= npsi || ty >= nzpsi || tz >= ntheta) return;
 
     const float mag0   = mag[tz];
-    const float half   = (mag0 - 1.0f) / 2.0f;
-    const float x      = (tx - npsi / 2.0f + r[2 * tz + 1] - half) / mag0 + n   / 2.0f;
-    const float y      = (ty - nzpsi/ 2.0f + r[2 * tz + 0] - half) / mag0 + nz  / 2.0f;
+    const float x      = (tx - (npsi-1) * 0.5f + r[2 * tz + 1]) / mag0 + (n-1) * 0.5f;
+    const float y      = (ty - (nzpsi-1) * 0.5f + r[2 * tz + 0]) / mag0 + (nz-1) * 0.5f;
     const int   ix     = (int)floorf(x);
     const int   iy     = (int)floorf(y);
     const float dx     = x - ix;
@@ -393,9 +390,8 @@ void __global__ d2s(float2* res, float2* c, float2* c1, float2* c2, float* r, fl
     if (tx >= n || ty >= nz || tz >= ntheta) return;
 
     const float mag0     = mag[tz];
-    const float half     = (mag0 - 1.0f) / 2.0f;
-    const float x        = (mag0 * (tx - n / 2) - r[2 * tz + 1] + half) + npsi  / 2;
-    const float y        = (mag0 * (ty - nz / 2) - r[2 * tz + 0] + half) + nzpsi / 2;
+    const float x        = mag0 * (tx - (n-1) * 0.5f) - r[2 * tz + 1] + (npsi-1) * 0.5f;
+    const float y        = mag0 * (ty - (nz-1) * 0.5f) - r[2 * tz + 0] + (nzpsi-1) * 0.5f;
     const int   ix       = (int)floorf(x);
     const int   iy       = (int)floorf(y);
     const float dx       = x - ix;
@@ -478,9 +474,8 @@ void __global__ d2s(float* res, float* c, float* c1, float* c2, float* r, float*
     if (tx >= n || ty >= nz || tz >= ntheta) return;
 
     const float mag0     = mag[tz];
-    const float half     = (mag0 - 1.0f) / 2.0f;
-    const float x        = (mag0 * (tx - n / 2) - r[2 * tz + 1] + half) + npsi  / 2;
-    const float y        = (mag0 * (ty - nz / 2) - r[2 * tz + 0] + half) + nzpsi / 2;
+    const float x        = mag0 * (tx - (n-1) * 0.5f) - r[2 * tz + 1] + (npsi-1) * 0.5f;
+    const float y        = mag0 * (ty - (nz-1) * 0.5f) - r[2 * tz + 0] + (nzpsi-1) * 0.5f;
     const int   ix       = (int)floorf(x);
     const int   iy       = (int)floorf(y);
     const float dx       = x - ix;
@@ -561,9 +556,8 @@ void __global__ ds(float2* res, float2* c, float2* c1, float* r, float* mag, flo
     if (tx >= n || ty >= nz || tz >= ntheta) return;
 
     const float mag0    = mag[tz];
-    const float half    = (mag0 - 1.0f) / 2.0f;
-    const float x       = (mag0 * (tx - n / 2) - r[2 * tz + 1] + half) + npsi  / 2;
-    const float y       = (mag0 * (ty - nz / 2) - r[2 * tz + 0] + half) + nzpsi / 2;
+    const float x       = mag0 * (tx - (n-1) * 0.5f) - r[2 * tz + 1] + (npsi-1) * 0.5f;
+    const float y       = mag0 * (ty - (nz-1) * 0.5f) - r[2 * tz + 0] + (nzpsi-1) * 0.5f;
     const int   ix      = (int)floorf(x);
     const int   iy      = (int)floorf(y);
     const float dx      = x - ix;
@@ -634,9 +628,8 @@ void __global__ ds(float* res, float* c, float* c1, float* r, float* mag, float*
     if (tx >= n || ty >= nz || tz >= ntheta) return;
 
     const float mag0    = mag[tz];
-    const float half    = (mag0 - 1.0f) / 2.0f;
-    const float x       = (mag0 * (tx - n / 2) - r[2 * tz + 1] + half) + npsi  / 2;
-    const float y       = (mag0 * (ty - nz / 2) - r[2 * tz + 0] + half) + nzpsi / 2;
+    const float x       = mag0 * (tx - (n-1) * 0.5f) - r[2 * tz + 1] + (npsi-1) * 0.5f;
+    const float y       = mag0 * (ty - (nz-1) * 0.5f) - r[2 * tz + 0] + (nzpsi-1) * 0.5f;
     const int   ix      = (int)floorf(x);
     const int   iy      = (int)floorf(y);
     const float dx      = x - ix;
@@ -704,9 +697,8 @@ void __global__ dsadj(float2* f, float2* dt1, float2* dt2, float2* c, float2 *g,
     if (tx >= n || ty >= nz || tz >= ntheta) return;
 
     const float mag0   = mag[tz];
-    const float half   = (mag0 - 1.0f) / 2.0f;
-    const float x      = (mag0 * (tx - n / 2) - r[2 * tz + 1] + half) + npsi  / 2;
-    const float y      = (mag0 * (ty - nz / 2) - r[2 * tz + 0] + half) + nzpsi / 2;
+    const float x      = mag0 * (tx - (n-1) * 0.5f) - r[2 * tz + 1] + (npsi-1) * 0.5f;
+    const float y      = mag0 * (ty - (nz-1) * 0.5f) - r[2 * tz + 0] + (nzpsi-1) * 0.5f;
     const int   ix     = (int)floorf(x);
     const int   iy     = (int)floorf(y);
     const float dx     = x - ix;
@@ -783,9 +775,8 @@ void __global__ dsadj(float* f, float* dt1, float* dt2, float* c, float* g, floa
     if (tx >= n || ty >= nz || tz >= ntheta) return;
 
     const float mag0   = mag[tz];
-    const float half   = (mag0 - 1.0f) / 2.0f;
-    const float x      = (mag0 * (tx - n / 2) - r[2 * tz + 1] + half) + npsi  / 2;
-    const float y      = (mag0 * (ty - nz / 2) - r[2 * tz + 0] + half) + nzpsi / 2;
+    const float x      = mag0 * (tx - (n-1) * 0.5f) - r[2 * tz + 1] + (npsi-1) * 0.5f;
+    const float y      = mag0 * (ty - (nz-1) * 0.5f) - r[2 * tz + 0] + (nzpsi-1) * 0.5f;
     const int   ix     = (int)floorf(x);
     const int   iy     = (int)floorf(y);
     const float dx     = x - ix;

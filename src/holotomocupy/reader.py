@@ -421,7 +421,7 @@ class Reader:
         scale = float(scale_arr[0])
 
         with h5py.File(path, 'r', driver="mpio", comm=self.comm) as f:
-            pos = f['pos'][self.ids][self.st_theta:self.end_theta].astype('float32')
+            pos = f['pos'][self.st_theta:self.end_theta].astype('float32')
 
         pos_up = pos * scale
         if out is None:
