@@ -19,7 +19,7 @@ extern "C" __global__ void gather(float2* g, float2* f, float* theta, int m, flo
     const float coeff1 = -PI * PI / mu0;
     const float inv_twon = 1.0f / ftwon;
 
-    const float cx  = (n - 1) * 0.5f;
+    const float cx  = n * 0.5f;
     const float x0 =  (tx - cx) / (float)n * __cosf(theta[ty]);
     const float y0 = -(tx - cx) / (float)n * __sinf(theta[ty]);
 
@@ -324,8 +324,8 @@ void __global__ sback(float2* g, float2* f, float* r, float* mag,
     if (tx >= npsi || ty >= nzpsi || tz >= ntheta) return;
 
     const float mag0   = mag[tz];
-    const float x      = (tx - (npsi-1) * 0.5f + r[2 * tz + 1]) / mag0 + (n-1) * 0.5f;
-    const float y      = (ty - (nzpsi-1) * 0.5f + r[2 * tz + 0]) / mag0 + (nz-1) * 0.5f;
+    const float x      = (tx - (npsi-1) * 0.5f + r[2 * tz + 1]) / mag0 + (n-1)   * 0.5f;
+    const float y      = (ty - (nzpsi-1)* 0.5f + r[2 * tz + 0]) / mag0 + (nz-1)  * 0.5f;
     const int   ix     = (int)floorf(x);
     const int   iy     = (int)floorf(y);
     const float dx     = x - ix;
