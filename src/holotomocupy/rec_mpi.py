@@ -866,19 +866,22 @@ class Rec:
                 logger.warning(f"iter={i}: pos abs error [px]  {parts}")
 
                 import matplotlib.pyplot as plt
-                fig, axes = plt.subplots(self.ndist, 2, figsize=(10, 3 * self.ndist))
+                fig, axes = plt.subplots(2, self.ndist, figsize=(5 * self.ndist, 6))
                 if self.ndist == 1:
-                    axes = axes[np.newaxis, :]
+                    axes = axes[:, np.newaxis]
                 theta_idx = np.arange(self.ntheta)
                 for j in range(self.ndist):
                     for d, label in enumerate(['y', 'x']):
-                        ax = axes[j, d]
+                        ax = axes[d, j]
                         ax.plot(theta_idx, all_delta[:, j, d])
                         ax.set_title(f"dist {j}, {label}")
                         ax.set_xlabel("theta index")
                         ax.set_ylabel("error [px]")
+                        ax.grid(True)
                 fig.tight_layout()
-                png_path = os.path.join(writer.path_out, f"pos_error_{i:04}.png")
+                pos_err_dir = os.path.join(writer.path_out, "pos_errors")
+                os.makedirs(pos_err_dir, exist_ok=True)
+                png_path = os.path.join(pos_err_dir, f"pos_error_{i:04}.png")
                 fig.savefig(png_path, dpi=150)
                 plt.close(fig)
                 logger.info(f"pos error plot → {png_path}")
