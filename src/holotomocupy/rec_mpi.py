@@ -135,6 +135,18 @@ class Rec:
         self.shrink_nd = cp.zeros((self.local_ntheta, self.ndist), dtype='float32')
         self.eff_demagnifications = cp.zeros((self.local_ntheta, self.ndist), dtype='float32')
 
+        # Data mask: taper detector edges where the overflowing object creates
+        # a residual the model cannot explain.  margin_fraction (0–0.5) sets
+        # the taper width as a fraction of n; defaults to 0 (no masking).
+        # Shape [1,1,1,n] broadcasts over data [ntheta, ndist, nz, n].
+        margin = int(self.margin_fraction * self.n)
+        mask = cp.ones(self.n, dtype='float32')
+        if margin > 0:
+            taper = cp.hanning(2 * margin).astype('float32')
+            mask[:margin]  = taper[:margin]
+            mask[-margin:] = taper[margin:]
+        self.data_mask = mask[None, None, None, :]
+
     def BH(self, writer=None):
         # refs to preallocated memory for gradients                
         vars = self.vars        
@@ -518,46 +530,47 @@ class Rec:
     ####### F0(x0) = 1/n\||x0|-d\|_2^2
     @staticmethod
     @cp.fuse()
-    def _F0_fused(x, d):
-        t = cp.abs(x) - d
+    def _F0_fused(x, d, mask):
+        t = (cp.abs(x) - d) * mask
         return t * t
 
     @nvtx.annotate("F0", color="green")
     def F0(self, x, d):
         """In: (x0), Out: const"""
-        return 1 / self.data_size * cp.sum(self._F0_fused(x, d))
+        return 1 / self.data_size * cp.sum(self._F0_fused(x, d, self.data_mask))
 
     @staticmethod
     @cp.fuse()
-    def _dF0_fused(x, d):
-        return x - d * (x / cp.abs(x))
+    def _dF0_fused(x, d, mask):
+        return (x - d * (x / cp.abs(x))) * mask * mask
 
     @nvtx.annotate("dF0", color="green")
     def dF0(self, x, y, d, return_x=False):
         """In: (x0,y0), Out: const"""
-        return 2 / self.data_size * redot(self._dF0_fused(x, d), y)
-            
+        return 2 / self.data_size * redot(self._dF0_fused(x, d, self.data_mask), y)
+
     @staticmethod
     @cp.fuse()
-    def _d2F_dF0_fused(x, y, z, w, d):
+    def _d2F_dF0_fused(x, y, z, w, d, mask):
         absval = cp.abs(x)
         l0 = x / absval
         d0 = d / absval
-        v = (1 - d0) * reprod(y, z) + d0 * reprod(l0, y) * reprod(l0, z)
+        mask2 = mask * mask
+        v = mask2 * ((1 - d0) * reprod(y, z) + d0 * reprod(l0, y) * reprod(l0, z))
         if w is not None:
-            v += reprod(x - d * l0, w)
+            v += mask2 * reprod(x - d * l0, w)
         return v
 
     @nvtx.annotate("d2F0_dF0", color="purple")
     def d2F_dF0(self, x, y, z, w, d):
         """In: (x0,y0,z0,w0), Out: const"""
-        return 2 / self.data_size * cp.sum(self._d2F_dF0_fused(x, y, z, w, d))
-        
+        return 2 / self.data_size * cp.sum(self._d2F_dF0_fused(x, y, z, w, d, self.data_mask))
+
     @staticmethod
     @cp.fuse()
-    def _gF0_fused(x, y, scale):
+    def _gF0_fused(x, y, scale, mask):
         td = y * (x / cp.abs(x))
-        return scale * (x - td)
+        return scale * (x - td) * mask * mask
 
     @nvtx.annotate("gF0", color="green")
     def gF0(self, x, y):
@@ -567,7 +580,7 @@ class Rec:
         for id in range(1, 4)[::-1]:
             x = self.F[id](x)
 
-        return self._gF0_fused(x, y, np.float32(2 / self.data_size))
+        return self._gF0_fused(x, y, np.float32(2 / self.data_size), self.data_mask)
     
     ####### x0 = F1(x11,x12) = D(x11\cdot x12)
     @nvtx.annotate("F1", color="green")
