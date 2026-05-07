@@ -140,6 +140,7 @@ class Rec:
         # the taper width as a fraction of n; defaults to 0 (no masking).
         # Shape [1,1,1,n] broadcasts over data [ntheta, ndist, nz, n].
         margin = int(self.margin_fraction * self.n)
+        logger.warning(f"data mask: margin_fraction={self.margin_fraction}, margin={margin} px (n={self.n})")
         mask = cp.ones(self.n, dtype='float32')
         if margin > 0:
             taper = cp.hanning(2 * margin).astype('float32')
