@@ -23,6 +23,7 @@ args.rho is length 4: [obj, prb, pos, bd]
 import numpy as np
 import cupy as cp
 import nvtx
+import pandas as pd
 
 from .rec_mpi import Rec
 from .utils import make_pinned, redot, mshow, mshow_polar, mshow_pos, logger, time
@@ -422,20 +423,24 @@ class RecDelta(Rec):
 
     # ============================================================ logging / vis
     def error_debug(self, vars, i):
-        """Same as parent + log bd and 1/bd. Override min-call with new signature."""
+        """Same as parent + log bd and 1/bd, also save delta/beta to conv.csv."""
         if not (i % self.error_step == 0 and self.error_step != -1):
             return
         err = self.min(vars["prb"], vars["obj"], vars["pos"], vars["proj"], vars["bd"])
         if self.rank == 0:
             bd = float(vars['bd'][0])
             inv_bd = 1.0 / bd if bd != 0 else float('inf')
+            # Add delta_beta column to the convergence table (defensive: user scripts
+            # may have re-initialised cl.table to the parent's 3-column schema).
+            if 'delta_beta' not in self.table.columns:
+                self.table['delta_beta'] = pd.NA
             if i == -1:
                 logger.warning(f"Initial {err=:1.5e}  delta/beta={inv_bd:.1f}")
-                self.table.loc[len(self.table)] = [i, err, 0]
+                self.table.loc[len(self.table)] = [i, err, 0, inv_bd]
             else:
                 ittime = time.time() - self.time_start
                 logger.warning(f"iter={i}: {ittime:.4f}sec {err=:1.5e}  delta/beta={inv_bd:.1f}")
-                self.table.loc[len(self.table)] = [i, err, ittime]
+                self.table.loc[len(self.table)] = [i, err, ittime, inv_bd]
             self.time_start = time.time()
             if hasattr(self, 'path_out'):
                 import os as _os
