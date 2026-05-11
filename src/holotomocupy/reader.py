@@ -199,7 +199,7 @@ class Reader:
                 i1 = min(i0 + batch, local_nz)
                 sl = (slice(stz + self.st_obj + i0, stz + self.st_obj + i1),
                       slice(stx, endx), slice(stx, endx))
-                if self.obj_dtype == 'complex64':
+                if out.dtype == np.complex64:
                     out[i0:i1].real[:] = obj_ds_re[sl]
                     out[i0:i1].imag[:] = obj_ds_im[sl] if obj_ds_im is not None else 0
                 else:
@@ -310,7 +310,7 @@ class Reader:
             cp.sqrt(raw, out=out)
         return out
 
-    def read_checkpoint(self, path, out_obj=None, out_prb=None, out_pos=None):
+    def read_checkpoint(self, path, out_obj=None, out_prb=None, out_pos=None, out_bd=None):
         """Read a checkpoint saved at a coarser resolution and upsample.
 
         Scale is inferred automatically from checkpoint n vs self.n.
@@ -389,7 +389,7 @@ class Reader:
                     (np.arange(i0, i1) * nz_src / n0).astype(np.intp), 0, nz_src - 1
                 ) - src_i0
 
-                if self.obj_dtype == 'complex64':
+                if out_obj.dtype == np.complex64:
                     out_obj[i0:i1] = blk[idx_local]
                 else:
                     out_obj[i0:i1] = blk[idx_local].real
@@ -404,7 +404,19 @@ class Reader:
         else:
             out_pos[:] = cp.array(pos_up, dtype='float32')
 
-        return {'obj': out_obj, 'prb': out_prb, 'pos': out_pos}
+        # Optional scalar attribute (e.g. RecDelta's bd). Broadcast across ranks.
+        bd_arr = np.zeros(1, dtype='float32')
+        if self.rank == 0:
+            with h5py.File(path, 'r') as f:
+                if 'bd' in f.attrs:
+                    bd_arr[0] = float(f.attrs['bd'])
+                else:
+                    bd_arr[0] = float('nan')
+        self.comm.Bcast(bd_arr, root=0)
+        if out_bd is not None and not np.isnan(bd_arr[0]):
+            out_bd[0] = float(bd_arr[0])
+
+        return {'obj': out_obj, 'prb': out_prb, 'pos': out_pos, 'bd': float(bd_arr[0])}
 
     def read_pos_checkpoint(self, path, out=None):
         """Read positions from a checkpoint file and upsample to current resolution.
@@ -515,7 +527,7 @@ class Reader:
                 acc /= factor
                 if factor > 1:
                     acc = acc.reshape(self.nobj, factor, self.nobj, factor).mean(axis=(1, 3))
-                if self.obj_dtype == 'complex64':
+                if out.dtype == np.complex64:
                     out[i].real[:] = acc
                     out[i].imag[:] = 0
                 else:

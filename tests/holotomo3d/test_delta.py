@@ -137,10 +137,10 @@ args.nobj                    = nobj
 args.obj_dtype       = 'complex64'              # required by RecDelta (proj/shift machinery is complex)
 args.mask            = 0.9                      # support mask radius as fraction of field of view
 args.lam_prbfit      = 2e-3                     # probe-fit regularisation weight
-args.rho             = [1, 0.05, 0.02, 3e-4]    # [obj, prb, pos, bd]
+args.rho             = [1, 0.05, 0.02, 1e-4]    # [obj, prb, pos, bd]
 args.niter           = 513                      # total number of BH iterations
 args.nchunk          = 16                       # projections/slices processed per GPU pass
-args.checkpoint_step = -1                       # disabled during sweep (no per-run checkpoints)
+args.checkpoint_step = 16                       # save checkpoint every N iters (-1 = never)
 args.error_step      = 8                        # log error every N iters (-1 = never)
 args.start_iter      = 0                        # resume from this iteration
 
@@ -148,6 +148,23 @@ args.start_iter      = 0                        # resume from this iteration
 args.comm = MPI.COMM_WORLD
 
 cl = RecDelta(args)
+
+#### Create Writer
+writer = Writer(
+    path_out    = '/data2/vnikitin/tmp/test_delta_results',
+    comm        = args.comm,
+    st_obj      = cl.st_obj,
+    end_obj     = cl.end_obj,
+    nzobj       = nobj,
+    nobj        = nobj,
+    st_theta    = cl.st_theta,
+    end_theta   = cl.end_theta,
+    ntheta      = ntheta,
+    ndist       = ndist,
+    nz          = n,
+    n           = n,
+    obj_dtype   = args.obj_dtype,
+)
 
 #### Set Ground-Truth Variables and Generate Synthetic Data
 cl.vars['obj'][:] = obj.real[cl.st_obj:cl.end_obj]
@@ -158,76 +175,15 @@ cl.vars['pos'][:] = cp.array(pos[cl.st_theta:cl.end_theta])
 cl.gen_sqrt_data(cl.vars, cl.data)
 cl.gen_sqrt_ref(cl.vars['prb'], cl.ref)
 
-#### Convergence sweep: run BH with different rho values for bd, then plot convergence
-import pandas as pd
-import matplotlib
-matplotlib.use('Agg')   # headless backend (script mode)
-import matplotlib.pyplot as plt
+#### Reconstruction — start from a perturbed initial guess
+cl.vars['obj'][:] = 0
+cl.vars['prb'][:] = cp.array(1)
+cl.vars['pos'][:] = cp.array((pos + pos_err)[cl.st_theta:cl.end_theta])
+cl.vars['bd'][0]  = bd / 2          # initial guess for bd (different from gt)
 
-rho_bd_values = [1e-12, 5e-5, 1e-4,  5e-4, 1e-3]
-runs = []   # list of (rho_bd, table, bd_final, full_obj)  -- full_obj only on rank 0
-
-for rho_bd in rho_bd_values:
-    if MPI.COMM_WORLD.Get_rank() == 0:
-        print(f"\n=== Running BH with rho_bd = {rho_bd:.0e} ===")
-    cl.rho_sq['bd']    = float(rho_bd) ** 2
-    cl.vars['obj'][:]  = 0
-    cl.vars['prb'][:]  = cp.array(1)
-    cl.vars['pos'][:]  = cp.array((pos + pos_err)[cl.st_theta:cl.end_theta])
-    cl.vars['bd'][0]   = bd / 2          # initial guess (different from gt)
-    cl.table = pd.DataFrame(columns=["iter", "err", "time"])
-    cl.BH()
-
-    # Gather the local obj-slice from every rank to rank 0 to assemble the full delta volume.
-    local_obj = np.array(cl.vars['obj'])
-    all_objs  = MPI.COMM_WORLD.gather(local_obj, root=0)
-    if MPI.COMM_WORLD.Get_rank() == 0:
-        full_obj = np.concatenate(all_objs, axis=0)
-        runs.append((rho_bd, cl.table.copy(), float(cl.vars['bd'][0]), full_obj))
+cl.BH(writer=writer)
 
 if MPI.COMM_WORLD.Get_rank() == 0:
-    import os
-    out_dir = '/data2/vnikitin/tmp/test_delta_results'
-    os.makedirs(out_dir, exist_ok=True)
-
-    # ---- Convergence plot ---------------------------------------------------
-    fig, ax = plt.subplots(1, 1, figsize=(8, 4))
-    markers = ['o', 's', '^', 'd', '*']
-    for (rho_bd, tbl, bd_final, _), m in zip(runs, markers):
-        ax.semilogy(tbl['iter'], tbl['err'], m + '-',
-                    label=f'rho_bd={rho_bd:.0e}  -> delta/beta={1/bd_final:.1f}')
-    ax.set_xlabel('iteration'); ax.set_ylabel('err')
-    ax.grid(True, which='both'); ax.legend()
-    ax.set_title(f'gt delta/beta = {1/bd:.1f}')
-    fig.tight_layout()
-    out_conv = os.path.join(out_dir, 'convergence_sweep.png')
-    fig.savefig(out_conv, dpi=120)
-    plt.close(fig)
-    print(f"\nConvergence sweep plot saved to: {out_conv}")
-
-    # ---- Middle-slice comparison with shared colorbar -----------------------
-    zmid = nobj // 2
-    panels = [(f'rho_bd={rho_bd:.0e}\ndelta/beta={1/bd_final:.1f}', vol[zmid])
-              for rho_bd, _, bd_final, vol in runs]
-    panels.append(('ground truth\ndelta/beta={:.1f}'.format(1/bd), obj.real[zmid]))
-
-    vmin = min(p[1].min() for p in panels)
-    vmax = max(p[1].max() for p in panels)
-
-    n_panels = len(panels)
-    fig, axes = plt.subplots(1, n_panels, figsize=(3.2 * n_panels, 4))
-    if n_panels == 1:
-        axes = [axes]
-    for ax, (title, slc) in zip(axes, panels):
-        im = ax.imshow(slc, cmap='gray', vmin=vmin, vmax=vmax)
-        ax.set_title(title, fontsize=9)
-        ax.set_axis_off()
-    fig.colorbar(im, ax=axes, fraction=0.025, pad=0.02)
-    out_slices = os.path.join(out_dir, 'slices_sweep.png')
-    fig.savefig(out_slices, dpi=120, bbox_inches='tight')
-    plt.close(fig)
-    print(f"Middle-slice comparison saved to: {out_slices}")
-
-    print(f"\nGround truth bd  = {bd:.6e}    (delta/beta = {1/bd:.1f})")
-    for rho_bd, _, bd_final, _ in runs:
-        print(f"  rho_bd={rho_bd:.0e}  ->  bd={bd_final:.6e}  (delta/beta={1/bd_final:.1f})")
+    print(f"\nCheckpoints saved to: /data2/vnikitin/tmp/test_delta_results/checkpoint_NNNN.h5")
+    print(f"Ground truth bd  = {bd:.6e}    (delta/beta = {1/bd:.1f})")
+    print(f"Final bd         = {float(cl.vars['bd'][0]):.6e}    (delta/beta = {1/float(cl.vars['bd'][0]):.1f})")

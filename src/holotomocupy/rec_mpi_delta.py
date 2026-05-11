@@ -7,15 +7,15 @@ analogous to how parent Rec keeps the Radon outside; what was the parent's `gF4`
 is renamed `gF5` here.
 
 Variables:
-  vars['obj']         = delta       (real 3D, float32)
-  vars['proj']   = R(delta)    (complex64 with imag=0; complex for MPI redist compatibility)
-  vars['bd']  = scalar      (cupy shape (1,) float32)
-  vars['prb']         = probe       (complex)
-  vars['pos']         = positions   (real)
-  (no more vars['proj'])
+  vars['obj']  = delta       (real 3D, float32)
+  vars['proj'] = R(delta)    (REAL float32 -- proj-side MPI uses a separate float32 MPIClass)
+  vars['bd']   = scalar      (cupy shape (1,) float32)
+  vars['prb']  = probe       (complex)
+  vars['pos']  = positions   (real)
 
 Cascade variables at level 4: (prb, proj, bd, pos)
 Cascade variables at level 3: (prb, proj_complex, pos)        -- after F4
+F4 promotes proj (real) to proj_complex (complex) by multiplying by (1+i*bd).
 
 args.rho is length 4: [obj, prb, pos, bd]
 """
@@ -51,6 +51,11 @@ class RecDelta(Rec):
         self.d2F_dF = [self.d2F_dF0, self.d2F_dF1, self.d2F_dF2, self.d2F_dF3, self.d2F_dF4]
         self.rho_sq['bd'] = float(args.rho[3]) ** 2
 
+        # Second MPIClass for proj-side traffic in float32 (proj is now real).
+        # Parent's self.cl_mpi (complex64) is unused by RecDelta but kept so inherited
+        # methods don't break.
+        self.cl_mpi_real = MPIClass(args.comm, self.nzobj, self.ntheta, self.nobj, 'float32')
+
     # ------------------------------------------------------------------ alloc
     def alloc_arrays(self):
         super().alloc_arrays()
@@ -64,20 +69,18 @@ class RecDelta(Rec):
         self.etas['obj']  = self.e_pad[2:-2]
         self.grads['obj'] = make_pinned([self.local_nzobj, self.nobj, self.nobj], dtype='float32')
 
-        # proj cache: complex64 (imag=0) so MPI redist (locked to complex64) accepts it.
-        self.vars['proj']  = make_pinned([self.local_ntheta, self.nzobj, self.nobj], dtype='complex64')
-        self.grads['proj'] = make_pinned([self.local_ntheta, self.nzobj, self.nobj], dtype='complex64')
-        self.etas['proj']  = make_pinned([self.local_ntheta, self.nzobj, self.nobj], dtype='complex64')
+        # proj cache: REAL float32 (R(delta) is real). Uses self.cl_mpi_real for MPI redist.
+        self.vars['proj']  = make_pinned([self.local_ntheta, self.nzobj, self.nobj], dtype='float32')
+        self.grads['proj'] = make_pinned([self.local_ntheta, self.nzobj, self.nobj], dtype='float32')
+        self.etas['proj']  = make_pinned([self.local_ntheta, self.nzobj, self.nobj], dtype='float32')
 
         # bd scalar
         self.vars['bd']  = cp.zeros((1,), dtype='float32')
         self.grads['bd'] = cp.zeros((1,), dtype='float32')
         self.etas['bd']  = cp.zeros((1,), dtype='float32')
 
-        # tmp pinned buffer for fwd_tomo on real obj
-        self.proj_tmp_real = make_pinned([self.ntheta, self.local_nzobj, self.nobj], dtype='complex64')
-        # complex tmp for RT(grads['proj']) -> grads['obj'] (gF5)
-        self._gF5_tmp = make_pinned([self.local_nzobj, self.nobj, self.nobj], dtype='complex64')
+        # tmp pinned buffer for fwd_tomo on real obj (matches proj-side dtype/layout)
+        self.proj_tmp_real = make_pinned([self.ntheta, self.local_nzobj, self.nobj], dtype='float32')
 
     # ============================================================ NEW F4 layer
     @nvtx.annotate("F4", color="green")
@@ -146,26 +149,25 @@ class RecDelta(Rec):
         bd = bd_arr.reshape(())  # scalar broadcast
 
         yproj_out = yproj_complex.real + bd * yproj_complex.imag
-        ybd_out = (cp.sum(proj.real * yproj_complex.imag)).reshape(1)
+        ybd_out = (cp.sum(proj * yproj_complex.imag)).reshape(1)
 
         return [yprb, yproj_out, ybd_out, ypos]
 
     # ======================================================== gF5 (was parent gF4: outside-cascade RT)
     @nvtx.annotate("gF5", color="green")
     def gF5(self, gradobj, gradproj):
-        """Adjoint Radon (chunked over z): grads['obj'] (real) = Re[ RT(grads['proj']) ].
-        proj has imag==0 by construction, so the imag part of RT is numerically negligible."""
+        """Adjoint Radon (chunked over z): grads['obj'] = RT(grads['proj']).
+        Both buffers are float32 -- Tomo.RT returns real for real input."""
         @self.gpu_batch(axis_out=0, axis_inp=1, nout=1)
         def _gF5(self, gradobj, gradproj):
-            tmp = self.cl_tomo.RT(gradproj)   # complex64 in/out
-            gradobj[:] = tmp.real
+            gradobj[:] = self.cl_tomo.RT(gradproj)
         _gF5(self, gradobj, gradproj)
 
     # ============================================================ helpers
     def _refresh_proj(self, vars):
-        """vars['proj'] = R(vars['obj']) (real, written into complex64 buffer)."""
+        """vars['proj'] = R(vars['obj']) (real float32; uses cl_mpi_real for redist)."""
         self.fwd_tomo(vars['obj'], out=self.proj_tmp_real)
-        self.cl_mpi.redist(self.proj_tmp_real, vars['proj'])
+        self.cl_mpi_real.redist(self.proj_tmp_real, vars['proj'])
 
     # ============================================================ BH
     def BH(self, writer=None):
@@ -204,7 +206,7 @@ class RecDelta(Rec):
             self.fwd_tomo(grads["obj"], out=self.proj_tmp_real)
             nvtx.pop_range()
             nvtx.push_range(":::BH:redist", color='red')
-            self.cl_mpi.redist(self.proj_tmp_real, grads['proj'])
+            self.cl_mpi_real.redist(self.proj_tmp_real, grads['proj'])
             nvtx.pop_range()
 
             # ---- CG direction beta from Hessian-weighted inner products
@@ -295,7 +297,7 @@ class RecDelta(Rec):
 
         # 2. gF5: RT applied chunked over z slices  -> grads['obj'] (real)
         nvtx.push_range(":::BH:redist back", color='red')
-        self.cl_mpi.redist(grads['proj'], self.proj_tmp_real, direction='backward')
+        self.cl_mpi_real.redist(grads['proj'], self.proj_tmp_real, direction='backward')
         nvtx.pop_range()
         self.gF5(grads['obj'], self.proj_tmp_real)
 
