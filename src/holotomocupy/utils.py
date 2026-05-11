@@ -29,21 +29,21 @@ def make_pinned(shape, dtype):
     return np.frombuffer(buf, dtype=dtype, count=n).reshape(shape, copy=False)
 
 
-def mshow(a, show=False, **args):
+def mshow(a, show=False, figsize=(6, 6), **args):
     if show:
         if isinstance(a, cp.ndarray):
             a = a.get()
-        fig, axs = plt.subplots(1, 1, figsize=(6, 6))
+        fig, axs = plt.subplots(1, 1, figsize=figsize)
         im = axs.imshow(a, cmap="gray", **args)
         fig.colorbar(im, fraction=0.046, pad=0.04)
         plt.show()
 
 
-def mshow_complex(a, show=False, **args):
+def mshow_complex(a, show=False, figsize=(14, 6), **args):
     if show:
         if isinstance(a, cp.ndarray):
             a = a.get()
-        fig, axs = plt.subplots(1, 2, figsize=(14, 6))
+        fig, axs = plt.subplots(1, 2, figsize=figsize)
         im = axs[0].imshow(a.real, cmap="gray", **args)
         scalebar = ScaleBar(0.015, "um", length_fraction=0.25,
                             font_properties={"family": "serif"},
@@ -55,11 +55,11 @@ def mshow_complex(a, show=False, **args):
         plt.show()
 
 
-def mshow_polar(a, show=False, **args):
+def mshow_polar(a, show=False, figsize=(14, 6), **args):
     if show:
         if isinstance(a, cp.ndarray):
             a = a.get()
-        fig, axs = plt.subplots(1, 2, figsize=(14, 6))
+        fig, axs = plt.subplots(1, 2, figsize=figsize)
         im = axs[0].imshow(np.abs(a), cmap="gray", **args)
         axs[0].set_title("abs")
         fig.colorbar(im, fraction=0.046, pad=0.04)
@@ -69,11 +69,11 @@ def mshow_polar(a, show=False, **args):
         plt.show()
 
 
-def mshow_pos(pos, show=False, **args):
+def mshow_pos(pos, show=False, figsize=(10, 4), **args):
     if show:
         if isinstance(pos, cp.ndarray):
             pos = pos.get()
-        _, ax = plt.subplots(1, 2, figsize=(10, 4))
+        _, ax = plt.subplots(1, 2, figsize=figsize)
         ax[0].plot(pos[..., 1], ".")
         ax[0].set_title("x")
         ax[1].plot(pos[..., 0], ".")

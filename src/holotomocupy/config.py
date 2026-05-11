@@ -52,8 +52,7 @@ def parse_args(config_file):
         args.prb_file       = os.path.join(args.path_out, _prb) if _prb else None
         _init_vol           = cfg.get("init_vol",        fallback=None)
         args.init_vol       = _init_vol.strip() if _init_vol and _init_vol.strip() else None
-        args.init_vol_scale   = cfg.getfloat("init_vol_scale",   fallback=1.0)
-        args.margin_fraction  = cfg.getfloat("margin_fraction",  fallback=0.0)
+        args.init_vol_scale = cfg.getfloat("init_vol_scale", fallback=1.0)
     except configparser.NoOptionError as e:
         raise ValueError(f"Missing required field in {config_file}: {e}") from e
 

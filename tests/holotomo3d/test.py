@@ -132,8 +132,8 @@ args.lam_prbfit  = 2e-3            # probe-fit regularisation weight
 args.rho         = [1, 0.05, 0.02] # gradient step-size scales for [obj, prb, pos]
 args.niter       = 129             # total number of BH iterations
 args.nchunk      = 16              # projections/slices processed per GPU pass (tune to GPU memory)
-args.vis_step    = 16              # save checkpoint every N iterations (-1 = never)
-args.err_step    = 4               # log error every N iterations (-1 = never)
+args.checkpoint_step = 16          # save checkpoint every N iterations (-1 = never)
+args.error_step      = 4           # log error every N iterations (-1 = never)
 args.start_iter  = 0               # resume from this iteration (0 = fresh start)
 
 # --- MPI ---
@@ -143,7 +143,7 @@ cl = Rec(args)
 
 #### Create Writer
 writer = Writer(
-    path_out    = 'test_results',
+    path_out    = '/data2/vnikitin/tmp/test_results',
     comm        = args.comm,
     st_obj      = cl.st_obj,
     end_obj     = cl.end_obj,
@@ -176,4 +176,4 @@ cl.BH(writer=writer)
 
 if MPI.COMM_WORLD.Get_rank() == 0:
     import os
-    print(f"\nCheckpoints saved to: {os.path.abspath('test_results')}/checkpoint_NNNN.h5")
+    print(f"\nCheckpoints saved to: /data2/vnikitin/tmp/test_results/checkpoint_NNNN.h5")

@@ -135,19 +135,6 @@ class Rec:
         self.shrink_nd = cp.zeros((self.local_ntheta, self.ndist), dtype='float32')
         self.eff_demagnifications = cp.zeros((self.local_ntheta, self.ndist), dtype='float32')
 
-        # Data mask: taper detector edges where the overflowing object creates
-        # a residual the model cannot explain.  margin_fraction (0–0.5) sets
-        # the taper width as a fraction of n; defaults to 0 (no masking).
-        # Shape [1,1,1,n] broadcasts over data [ntheta, ndist, nz, n].
-        margin = int(self.margin_fraction * self.n)
-        logger.warning(f"data mask: margin_fraction={self.margin_fraction}, margin={margin} px (n={self.n})")
-        mask = cp.ones(self.n, dtype='float32')
-        if margin > 0:
-            taper = cp.hanning(2 * margin).astype('float32')
-            mask[:margin]  = taper[:margin]
-            mask[-margin:] = taper[margin:]
-        self.data_mask = mask[None, None, None, :]
-
     def BH(self, writer=None):
         # refs to preallocated memory for gradients                
         vars = self.vars        
@@ -531,57 +518,56 @@ class Rec:
     ####### F0(x0) = 1/n\||x0|-d\|_2^2
     @staticmethod
     @cp.fuse()
-    def _F0_fused(x, d, mask):
-        t = (cp.abs(x) - d) * mask
+    def _F0_fused(x, d):
+        t = cp.abs(x) - d
         return t * t
 
     @nvtx.annotate("F0", color="green")
     def F0(self, x, d):
         """In: (x0), Out: const"""
-        return 1 / self.data_size * cp.sum(self._F0_fused(x, d, self.data_mask))
+        return 1 / self.data_size * cp.sum(self._F0_fused(x, d))
 
     @staticmethod
     @cp.fuse()
-    def _dF0_fused(x, d, mask):
-        return (x - d * (x / cp.abs(x))) * mask * mask
+    def _dF0_fused(x, d):
+        return x - d * (x / cp.abs(x))
 
     @nvtx.annotate("dF0", color="green")
     def dF0(self, x, y, d, return_x=False):
         """In: (x0,y0), Out: const"""
-        return 2 / self.data_size * redot(self._dF0_fused(x, d, self.data_mask), y)
+        return 2 / self.data_size * redot(self._dF0_fused(x, d), y)
 
     @staticmethod
     @cp.fuse()
-    def _d2F_dF0_fused(x, y, z, w, d, mask):
+    def _d2F_dF0_fused(x, y, z, w, d):
         absval = cp.abs(x)
         l0 = x / absval
         d0 = d / absval
-        mask2 = mask * mask
-        v = mask2 * ((1 - d0) * reprod(y, z) + d0 * reprod(l0, y) * reprod(l0, z))
+        v = (1 - d0) * reprod(y, z) + d0 * reprod(l0, y) * reprod(l0, z)
         if w is not None:
-            v += mask2 * reprod(x - d * l0, w)
+            v += reprod(x - d * l0, w)
         return v
 
     @nvtx.annotate("d2F0_dF0", color="purple")
     def d2F_dF0(self, x, y, z, w, d):
         """In: (x0,y0,z0,w0), Out: const"""
-        return 2 / self.data_size * cp.sum(self._d2F_dF0_fused(x, y, z, w, d, self.data_mask))
+        return 2 / self.data_size * cp.sum(self._d2F_dF0_fused(x, y, z, w, d))
 
     @staticmethod
     @cp.fuse()
-    def _gF0_fused(x, y, scale, mask):
+    def _gF0_fused(x, y, scale):
         td = y * (x / cp.abs(x))
-        return scale * (x - td) * mask * mask
+        return scale * (x - td)
 
     @nvtx.annotate("gF0", color="green")
     def gF0(self, x, y):
         """In: x, y = F0(F1(..(x)))), Out: y0"""
 
         # calc fwd starting from 1
-        for id in range(1, 4)[::-1]:
+        for id in range(1, len(self.F))[::-1]:
             x = self.F[id](x)
 
-        return self._gF0_fused(x, y, np.float32(2 / self.data_size), self.data_mask)
+        return self._gF0_fused(x, y, np.float32(2 / self.data_size))
     
     ####### x0 = F1(x11,x12) = D(x11\cdot x12)
     @nvtx.annotate("F1", color="green")
@@ -645,7 +631,7 @@ class Rec:
         y0 = y
 
         # calc fwd starting from 2
-        for id in range(2, 4)[::-1]:
+        for id in range(2, len(self.F))[::-1]:
             x = self.F[id](x)
 
         x11, x12 = x
@@ -728,7 +714,7 @@ class Rec:
         y11, y12 = y
 
         # calc fwd starting from 3
-        for id in range(3, 4)[::-1]:
+        for id in range(3, len(self.F))[::-1]:
             x = self.F[id](x)
         x21, x22 = x
 
@@ -808,7 +794,7 @@ class Rec:
 
         y21, y22 = y
 
-        for id in range(4, 4)[::-1]:
+        for id in range(4, len(self.F))[::-1]:
             x = self.F[id](x)
         x31, x32, x33 = x
 
@@ -859,9 +845,11 @@ class Rec:
                 residual = self.compute_residual(vars)
                 writer.write_checkpoint(vars, i, self.norm_const, residual=residual)
         else:
-            mshow_complex(vars['obj'][self.local_nzobj//2],True)
-            mshow_polar(vars['prb'][0],True)
-            mshow_pos(vars['pos']-self.pos_init,True)
+            mshow_complex(vars['obj'][self.local_nzobj//2], True, figsize=(8, 3))
+            mshow_complex(vars['obj'][:,self.nobj//2], True, figsize=(8, 3))
+            
+            # mshow_polar(vars['prb'][0], True, figsize=(8, 3))
+            # mshow_pos(vars['pos']-self.pos_init, True, figsize=(5, 2))
 
         if writer is not None and i > self.start_iter:
             delta      = cp.asnumpy(vars['pos'] - self.pos_init)        # [local_ntheta, ndist, 2]
@@ -923,18 +911,22 @@ class Rec:
     def gen_sqrt_data(self, vars, out):
         """Generate synthetic data"""
 
+        # shrinkage
+        self.eff_demagnifications[:]  = (1 + self.shrink_nd) / cp.array(self.norm_magnifications[None, :])
+
         vars["obj"] /= self.norm_const
         self.fwd_tomo(vars["obj"],out = self.proj_tmp)
         self.redist(self.proj_tmp, vars['proj'])
         @self.gpu_batch(axis_out=0, axis_inp=0,nout=1)
-        def _gen_data(self, out, proj, pos, prb):
+        def _gen_data(self, out, proj, pos, eff_demag, prb):
+            self._eff_demag_chunk = eff_demag
             x = [prb, proj, pos]
             y = x  # forming output
             # compute functional by applying operators in reverse order
             for id in range(1, len(self.F))[::-1]:
                 y = self.F[id](y)
             out[:] = cp.abs(y)
-        _gen_data(self, out, vars['proj'], vars['pos'], vars['prb'])
+        _gen_data(self, out, vars['proj'], vars['pos'], self.eff_demagnifications, vars['prb'])
         vars["obj"] *= self.norm_const
 
     def compute_residual(self, vars):
