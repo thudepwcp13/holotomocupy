@@ -14,6 +14,12 @@ The sample file must also contain the sample scanning coordinates:
     /entry/measurement/tom_sam_x
     /entry/measurement/tom_y
 
+The NFP solver currently works on square arrays.  If n is larger than one
+camera dimension, this adapter takes the full available field of view in that
+direction and pads the missing pixels symmetrically.  The sample padding is set
+to flat-field-corrected background intensity 1, so it does not introduce a fake
+absorbing object.
+
 Typical usage:
 
     # First validate the HDF5 layout and correction statistics.
@@ -119,7 +125,58 @@ def _as_3d_shape(shape: Tuple[int, ...], file_name: str, path: str) -> Tuple[int
     raise ValueError(f"Expected 2-D or 3-D detector data at {path!r} in {file_name}, got shape={shape}")
 
 
-def _read_mean_image(file_name: str, path: str, crop: Tuple[slice, slice]) -> np.ndarray:
+def _axis_crop_pad(length: int, n: int) -> Tuple[slice, Tuple[int, int]]:
+    """Return a centered source slice and symmetric output padding for one axis."""
+    if n <= length:
+        start = (length - n) // 2
+        return slice(start, start + n), (0, 0)
+
+    deficit = n - length
+    pad_before = deficit // 2
+    pad_after = deficit - pad_before
+    return slice(0, length), (pad_before, pad_after)
+
+
+def _center_crop_pad(ny: int, nx: int, n: int) -> Tuple[slice, slice, Tuple[Tuple[int, int], Tuple[int, int]], int]:
+    """
+    Make a square n x n detector view using centered crop plus optional padding.
+
+    If n <= 0, use n = max(ny, nx), i.e. preserve the complete detector field of
+    view and pad the shorter detector dimension to a square.
+    """
+    if n <= 0:
+        n = max(ny, nx)
+    if n <= 0:
+        raise ValueError(f"Invalid requested square size n={n}")
+    if n > max(ny, nx):
+        raise ValueError(
+            f"Requested n={n} is larger than both detector dimensions ny={ny}, nx={nx}. "
+            "Use n <= max(ny, nx), or intentionally add a larger padded mode later."
+        )
+
+    y_crop, y_pad = _axis_crop_pad(ny, n)
+    x_crop, x_pad = _axis_crop_pad(nx, n)
+    return y_crop, x_crop, (y_pad, x_pad), n
+
+
+def _pad_2d(arr: np.ndarray, pad: Tuple[Tuple[int, int], Tuple[int, int]], value: float) -> np.ndarray:
+    if pad == ((0, 0), (0, 0)):
+        return arr.astype("float32", copy=False)
+    return np.pad(arr, pad, mode="constant", constant_values=value).astype("float32")
+
+
+def _pad_stack(arr: np.ndarray, pad: Tuple[Tuple[int, int], Tuple[int, int]], value: float) -> np.ndarray:
+    if pad == ((0, 0), (0, 0)):
+        return arr.astype("float32", copy=False)
+    return np.pad(arr, ((0, 0), pad[0], pad[1]), mode="constant", constant_values=value).astype("float32")
+
+
+def _read_mean_image(
+    file_name: str,
+    path: str,
+    crop: Tuple[slice, slice],
+    pad: Tuple[Tuple[int, int], Tuple[int, int]],
+) -> np.ndarray:
     """Read the mean of a detector stack without keeping the full stack in RAM."""
     with h5py.File(file_name, "r") as f:
         ds = _require_dataset(f, path)
@@ -130,7 +187,34 @@ def _read_mean_image(file_name: str, path: str, crop: Tuple[slice, slice]) -> np
         else:
             for i in range(nframes):
                 acc += ds[i, crop[0], crop[1]].astype("float64")
-        return (acc / max(nframes, 1)).astype("float32")
+        mean_img = (acc / max(nframes, 1)).astype("float32")
+
+    # Dark/flat images are only used to correct real detector pixels.  The padded
+    # sample pixels are set to NaN before correction and then converted to 1, but
+    # storing padded dark/flat with their medians keeps the sanity-check HDF5 finite.
+    fill = float(np.nanmedian(mean_img)) if mean_img.size else 0.0
+    return _pad_2d(mean_img, pad, fill)
+
+
+def _read_sample_frames(
+    file_name: str,
+    path: str,
+    crop: Tuple[slice, slice],
+    pad: Tuple[Tuple[int, int], Tuple[int, int]],
+    frame_slice,
+) -> np.ndarray:
+    """
+    Read sample frames, crop them, and pad missing detector area with NaN.
+
+    NaN padding is later mapped to flat-field-corrected background value 1.0.
+    """
+    with h5py.File(file_name, "r") as f:
+        ds = _require_dataset(f, path)
+        if len(ds.shape) == 2:
+            raw = ds[crop[0], crop[1]][None]
+        else:
+            raw = ds[frame_slice, crop[0], crop[1]]
+    return _pad_stack(raw.astype("float32"), pad, np.nan)
 
 
 def _read_positions(sample_file: str, x_path: str, y_path: str) -> Tuple[np.ndarray, np.ndarray]:
@@ -159,16 +243,6 @@ def _unit_scale_to_m(unit: str, voxelsize: float) -> float:
     if unit not in scales:
         raise ValueError(f"Unsupported position_unit={unit!r}. Use one of: {sorted(scales)}")
     return scales[unit]
-
-
-def _center_crop(ny: int, nx: int, n: int) -> Tuple[slice, slice, int]:
-    if n <= 0:
-        n = min(ny, nx)
-    if n > ny or n > nx:
-        raise ValueError(f"Requested crop n={n}, but detector frame is only ny={ny}, nx={nx}")
-    sty = (ny - n) // 2
-    stx = (nx - n) // 2
-    return slice(sty, sty + n), slice(stx, stx + n), n
 
 
 def _correct_sample_chunk(raw: np.ndarray, dark: np.ndarray, flat_minus_dark: np.ndarray) -> np.ndarray:
@@ -200,7 +274,6 @@ def main() -> None:
 
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
-    size = comm.Get_size()
 
     ngpus = cp.cuda.runtime.getDeviceCount()
     if ngpus > 0:
@@ -222,7 +295,8 @@ def main() -> None:
             f"dark={(dark_ny, dark_nx)}, flat={(flat_ny, flat_nx)}, sample={(ny, nx)}"
         )
 
-    y_crop, x_crop, n = _center_crop(ny, nx, args.n)
+    y_crop, x_crop, pad, n = _center_crop_pad(ny, nx, args.n)
+    y_pad, x_pad = pad
 
     magnification = args.focustodetectordistance / args.z1
     voxelsize = args.detector_pixelsize / magnification
@@ -255,6 +329,7 @@ def main() -> None:
         logger.info(f"flat shape              = {flat_shape}  frames={n_flat}")
         logger.info(f"sample shape            = {sample_shape}  frames={ntheta}")
         logger.info(f"crop                    = rows[{y_crop.start}:{y_crop.stop}], cols[{x_crop.start}:{x_crop.stop}], n={n}")
+        logger.info(f"padding                 = rows before/after={y_pad}, cols before/after={x_pad}")
         logger.info(f"energy                  = {args.energy:.6g} keV  wavelength={wavelength:.6e} m")
         logger.info(f"z1                      = {args.z1:.6e} m")
         logger.info(f"focustodetectordistance = {args.focustodetectordistance:.6e} m")
@@ -268,8 +343,8 @@ def main() -> None:
         logger.info(f"nobj                    = {nobj}")
 
     # --- Flat/dark correction statistics -------------------------------------------
-    dark = _read_mean_image(args.dark_file, args.detector_path, (y_crop, x_crop))
-    flat = _read_mean_image(args.flat_file, args.detector_path, (y_crop, x_crop))
+    dark = _read_mean_image(args.dark_file, args.detector_path, (y_crop, x_crop), pad)
+    flat = _read_mean_image(args.flat_file, args.detector_path, (y_crop, x_crop), pad)
     flat_minus_dark = flat - dark
     eps = max(float(np.nanmedian(flat_minus_dark)) * 1e-6, 1e-6)
     flat_minus_dark = np.where(flat_minus_dark > eps, flat_minus_dark, eps).astype("float32")
@@ -277,12 +352,7 @@ def main() -> None:
     preview_count = min(args.preview_count, ntheta)
     preview = None
     if rank == 0 and preview_count > 0:
-        with h5py.File(args.sample_file, "r") as f:
-            ds = _require_dataset(f, args.detector_path)
-            if len(ds.shape) == 2:
-                raw_preview = ds[y_crop, x_crop][None]
-            else:
-                raw_preview = ds[:preview_count, y_crop, x_crop]
+        raw_preview = _read_sample_frames(args.sample_file, args.detector_path, (y_crop, x_crop), pad, slice(0, preview_count))
         preview = _correct_sample_chunk(raw_preview, dark, flat_minus_dark)
         logger.info(f"flat-dark median        = {float(np.median(flat_minus_dark)):.6g}")
         logger.info(f"flat-dark min/max       = {float(flat_minus_dark.min()):.6g} / {float(flat_minus_dark.max()):.6g}")
@@ -308,7 +378,13 @@ def main() -> None:
             fout.attrs["magnification"] = magnification
             fout.attrs["voxelsize_m"] = voxelsize
             fout.attrs["crop_y_start"] = y_crop.start
+            fout.attrs["crop_y_stop"] = y_crop.stop
             fout.attrs["crop_x_start"] = x_crop.start
+            fout.attrs["crop_x_stop"] = x_crop.stop
+            fout.attrs["pad_y_before"] = y_pad[0]
+            fout.attrs["pad_y_after"] = y_pad[1]
+            fout.attrs["pad_x_before"] = x_pad[0]
+            fout.attrs["pad_x_after"] = x_pad[1]
             fout.attrs["n"] = n
             fout.attrs["nobj"] = nobj
         logger.info(f"Wrote sanity-check output to {args.h5_out}")
@@ -344,12 +420,7 @@ def main() -> None:
     cl = RecNFP(rec_args)
 
     # Each rank reads and corrects only its local theta range.
-    with h5py.File(args.sample_file, "r") as f:
-        ds = _require_dataset(f, args.detector_path)
-        if len(ds.shape) == 2:
-            raw_slice = ds[y_crop, x_crop][None]
-        else:
-            raw_slice = ds[cl.st_theta:cl.end_theta, y_crop, x_crop]
+    raw_slice = _read_sample_frames(args.sample_file, args.detector_path, (y_crop, x_crop), pad, slice(cl.st_theta, cl.end_theta))
     corr = _correct_sample_chunk(raw_slice, dark, flat_minus_dark)
     local_sum = float(corr.sum())
     global_mean = comm.allreduce(local_sum, op=MPI.SUM) / (ntheta * n * n)
