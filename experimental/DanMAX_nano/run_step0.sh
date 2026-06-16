@@ -71,9 +71,12 @@ POS_COL_SIGN="${POS_COL_SIGN:-1.0}"              # column shift from tom_sam_x
 CENTER_POSITIONS="${CENTER_POSITIONS:-true}"
 
 # -----------------------------------------------------------------------------
-# Reconstruction crop and NFP solver parameters
+# Reconstruction square size and NFP solver parameters
 # -----------------------------------------------------------------------------
-N="${N:-2048}"                                   # set N=0 for largest centered square crop
+# N=2048 uses a centered 2048 x 2048 crop.
+# N=3712 on a 2592 x 3712 frame keeps the full width and pads height symmetrically.
+# N=0 uses N=max(ny, nx), i.e. full field of view padded to square.
+N="${N:-2048}"
 NITER="${NITER:-129}"
 NCHUNK="${NCHUNK:-4}"
 VIS_STEP="${VIS_STEP:-32}"
