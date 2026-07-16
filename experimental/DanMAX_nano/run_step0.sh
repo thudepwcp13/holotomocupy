@@ -34,9 +34,10 @@ cd "${SCRIPT_DIR}"
 # -----------------------------------------------------------------------------
 # Input files
 # -----------------------------------------------------------------------------
-DARK_FILE="${DARK_FILE:-/path/to/dark.h5}"
-FLAT_FILE="${FLAT_FILE:-/path/to/flat.h5}"
-SAMPLE_FILE="${SAMPLE_FILE:-/path/to/sample.h5}"
+DATA_FOLDER="/dtu/3d-imaging-center/projects/2026_DANFIX_XHIST/raw_data_3DIM/DanMAX April 2026/NTT_multi_dist/"
+DARK_FILE="${DARK_FILE:-${DATA_FOLDER}/scan-0076.h5}"
+FLAT_FILE="${FLAT_FILE:-${DATA_FOLDER}/scan-0097.h5}"
+SAMPLE_FILE="${SAMPLE_FILE:-${DATA_FOLDER}/scan-0096.h5}"
 
 # -----------------------------------------------------------------------------
 # Output paths
@@ -57,15 +58,15 @@ Y_PATH="${Y_PATH:-/entry/measurement/tom_y}"
 # -----------------------------------------------------------------------------
 # Geometry parameters. Edit or override these before a production run.
 # -----------------------------------------------------------------------------
-ENERGY="${ENERGY:-20.0}"                         # keV
-Z1="${Z1:-0.004}"                                # focus-to-sample distance [m]
-FOCUSTODETECTORDISTANCE="${FOCUSTODETECTORDISTANCE:-1.20}" # focus-to-detector distance [m]
-DETECTOR_PIXELSIZE="${DETECTOR_PIXELSIZE:-6.5e-6}"          # detector pixel size [m]
+ENERGY="${ENERGY:-19.55}"                         # keV
+Z1="${Z1:-0.12669}"                                # focus-to-sample distance [m]
+FOCUSTODETECTORDISTANCE="${FOCUSTODETECTORDISTANCE:-1.55669}" # focus-to-detector distance [m]
+DETECTOR_PIXELSIZE="${DETECTOR_PIXELSIZE:-5.5e-7}"          # detector pixel size [m]
 
 # -----------------------------------------------------------------------------
 # Position conversion for tom_sam_x / tom_y
 # -----------------------------------------------------------------------------
-POSITION_UNIT="${POSITION_UNIT:-um}"             # m, mm, um, nm, or px
+POSITION_UNIT="${POSITION_UNIT:-mm}"             # m, mm, um, nm, or px
 POS_ROW_SIGN="${POS_ROW_SIGN:--1.0}"             # row shift from tom_y
 POS_COL_SIGN="${POS_COL_SIGN:-1.0}"              # column shift from tom_sam_x
 CENTER_POSITIONS="${CENTER_POSITIONS:-true}"
@@ -76,11 +77,11 @@ CENTER_POSITIONS="${CENTER_POSITIONS:-true}"
 # N=2048 uses a centered 2048 x 2048 crop.
 # N=3712 on a 2592 x 3712 frame keeps the full width and pads height symmetrically.
 # N=0 uses N=max(ny, nx), i.e. full field of view padded to square.
-N="${N:-2048}"
+N="${N:-3712}"
 NITER="${NITER:-129}"
 NCHUNK="${NCHUNK:-4}"
-VIS_STEP="${VIS_STEP:-32}"
-ERR_STEP="${ERR_STEP:-32}"
+VIS_STEP="${VIS_STEP:-4}"
+ERR_STEP="${ERR_STEP:-4}"
 RHO="${RHO:-1,2,0.1}"
 
 # -----------------------------------------------------------------------------
@@ -154,6 +155,8 @@ echo "log                  : ${LOG_FILE}"
 echo "n                    : ${N}"
 echo "ngpus                : ${NGPUS}"
 
+unset I_MPI_SHM_LMT
+unset I_MPI_FABRICS_LIST
 if [[ "${RUN_RECONSTRUCTION}" == "true" || "${RUN_RECONSTRUCTION}" == "True" || "${RUN_RECONSTRUCTION}" == "1" ]]; then
   if [[ "${NGPUS}" -gt 1 ]]; then
     echo "Running: ${MPIRUN_BIN} -n ${NGPUS} ${PYTHON_BIN} step0.py ${CONFIG_FILE}"
