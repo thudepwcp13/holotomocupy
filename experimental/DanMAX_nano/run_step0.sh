@@ -42,7 +42,7 @@ SAMPLE_FILE="${SAMPLE_FILE:-${DATA_FOLDER}/scan-0096.h5}"
 # -----------------------------------------------------------------------------
 # Output paths
 # -----------------------------------------------------------------------------
-OUT_DIR="${OUT_DIR:-${SCRIPT_DIR}/output_step0}"
+OUT_DIR="${OUT_DIR:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/output/output_step0_v2qq}"
 CONFIG_FILE="${CONFIG_FILE:-${OUT_DIR}/config_step0.generated.conf}"
 H5_OUT="${H5_OUT:-${OUT_DIR}/DanMAX_nano_nfp_results.h5}"
 PATH_OUT="${PATH_OUT:-${OUT_DIR}/nfp_work}"
@@ -78,10 +78,10 @@ CENTER_POSITIONS="${CENTER_POSITIONS:-true}"
 # N=3712 on a 2592 x 3712 frame keeps the full width and pads height symmetrically.
 # N=0 uses N=max(ny, nx), i.e. full field of view padded to square.
 N="${N:-3712}"
-NITER="${NITER:-129}"
+NITER="${NITER:-5}"
 NCHUNK="${NCHUNK:-4}"
-VIS_STEP="${VIS_STEP:-4}"
-ERR_STEP="${ERR_STEP:-4}"
+VIS_STEP="${VIS_STEP:-1}"
+ERR_STEP="${ERR_STEP:-1}"
 RHO="${RHO:-1,2,0.1}"
 
 # -----------------------------------------------------------------------------
@@ -91,6 +91,7 @@ RUN_RECONSTRUCTION="${RUN_RECONSTRUCTION:-${DEFAULT_RUN_RECONSTRUCTION}}"
 WRITE_CORRECTED_PREVIEW="${WRITE_CORRECTED_PREVIEW:-true}"
 PREVIEW_COUNT="${PREVIEW_COUNT:-8}"
 LOG_LEVEL="${LOG_LEVEL:-INFO}"
+FLAT_CORRECTION="${FLAT_CORRECTION:-false}"
 NGPUS="${NGPUS:-1}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 MPIRUN_BIN="${MPIRUN_BIN:-mpirun}"
@@ -144,6 +145,8 @@ run_reconstruction=${RUN_RECONSTRUCTION}
 write_corrected_preview=${WRITE_CORRECTED_PREVIEW}
 preview_count=${PREVIEW_COUNT}
 log_level=${LOG_LEVEL}
+
+flat_correct=${FLAT_CORRECTION}
 EOF
 
 echo "=== DanMAX nano step0 launcher ==="
