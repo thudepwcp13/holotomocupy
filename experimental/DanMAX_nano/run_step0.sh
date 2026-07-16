@@ -32,7 +32,7 @@ FLAT_FILE="${FLAT_FILE:-${DATA_FOLDER}/scan-0097.h5}"
 SAMPLE_FILE="${SAMPLE_FILE:-${DATA_FOLDER}/scan-0096.h5}"
 
 # Output paths
-OUT_DIR="${OUT_DIR:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/output/output_step0_v2qq}"
+OUT_DIR="${OUT_DIR:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/output/output_step0_v3_3712}"
 CONFIG_FILE="${CONFIG_FILE:-${OUT_DIR}/config_step0.generated.conf}"
 H5_OUT="${H5_OUT:-${OUT_DIR}/DanMAX_nano_nfp_results.h5}"
 PATH_OUT="${PATH_OUT:-${OUT_DIR}/nfp_work}"
@@ -57,7 +57,7 @@ CENTER_POSITIONS="${CENTER_POSITIONS:-true}"
 
 # Reconstruction size and solver parameters
 N="${N:-3712}"
-NITER="${NITER:-5}"
+NITER="${NITER:-10}"
 NCHUNK="${NCHUNK:-4}"
 VIS_STEP="${VIS_STEP:-1}"
 ERR_STEP="${ERR_STEP:-1}"
