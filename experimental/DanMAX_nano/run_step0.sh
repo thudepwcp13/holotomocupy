@@ -5,78 +5,57 @@ set -euo pipefail
 # DanMAX nano step0 launcher
 # -----------------------------------------------------------------------------
 # Usage:
-#   bash run_step0.sh sanity   # default: only validate HDF5 layout and write preview
+#   bash run_step0.sh sanity   # validate HDF5 layout and write preview
 #   bash run_step0.sh nfp      # run near-field ptychography reconstruction
 #
-# All variables below can be overridden from the command line, for example:
-#   DARK_FILE=/data/dark.h5 FLAT_FILE=/data/flat.h5 SAMPLE_FILE=/data/sample.h5 bash run_step0.sh sanity
-#   NGPUS=4 RUN_RECONSTRUCTION=true bash run_step0.sh nfp
+# Example masked full-width run:
+#   N=3712 USE_VALID_DETECTOR_MASK=true NGPUS=1 bash run_step0.sh nfp
 # -----------------------------------------------------------------------------
 
 MODE="${1:-sanity}"
 case "${MODE}" in
-  sanity)
-    DEFAULT_RUN_RECONSTRUCTION="false"
-    ;;
-  nfp|recon|reconstruction)
-    DEFAULT_RUN_RECONSTRUCTION="true"
-    ;;
+  sanity) DEFAULT_RUN_RECONSTRUCTION="false" ;;
+  nfp|recon|reconstruction) DEFAULT_RUN_RECONSTRUCTION="true" ;;
   *)
     echo "ERROR: unknown mode '${MODE}'. Use 'sanity' or 'nfp'." >&2
     exit 2
     ;;
 esac
 
-# Resolve this directory so the script can be launched from anywhere.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
 
-# -----------------------------------------------------------------------------
 # Input files
-# -----------------------------------------------------------------------------
 DATA_FOLDER="/dtu/3d-imaging-center/projects/2026_DANFIX_XHIST/raw_data_3DIM/DanMAX April 2026/NTT_multi_dist/"
 DARK_FILE="${DARK_FILE:-${DATA_FOLDER}/scan-0076.h5}"
 FLAT_FILE="${FLAT_FILE:-${DATA_FOLDER}/scan-0097.h5}"
 SAMPLE_FILE="${SAMPLE_FILE:-${DATA_FOLDER}/scan-0096.h5}"
 
-# -----------------------------------------------------------------------------
 # Output paths
-# -----------------------------------------------------------------------------
 OUT_DIR="${OUT_DIR:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/output/output_step0_v2qq}"
 CONFIG_FILE="${CONFIG_FILE:-${OUT_DIR}/config_step0.generated.conf}"
 H5_OUT="${H5_OUT:-${OUT_DIR}/DanMAX_nano_nfp_results.h5}"
 PATH_OUT="${PATH_OUT:-${OUT_DIR}/nfp_work}"
 LOG_FILE="${LOG_FILE:-${OUT_DIR}/step0_${MODE}.log}"
 
-# -----------------------------------------------------------------------------
 # DanMAX HDF5 paths
-# -----------------------------------------------------------------------------
 DETECTOR_PATH="${DETECTOR_PATH:-/entry/measurement/orca}"
 X_PATH="${X_PATH:-/entry/measurement/tom_sam_x}"
 Y_PATH="${Y_PATH:-/entry/measurement/tom_y}"
 
-# -----------------------------------------------------------------------------
-# Geometry parameters. Edit or override these before a production run.
-# -----------------------------------------------------------------------------
-ENERGY="${ENERGY:-19.55}"                         # keV
-Z1="${Z1:-0.12669}"                                # focus-to-sample distance [m]
-FOCUSTODETECTORDISTANCE="${FOCUSTODETECTORDISTANCE:-1.55669}" # focus-to-detector distance [m]
-DETECTOR_PIXELSIZE="${DETECTOR_PIXELSIZE:-5.5e-7}"          # detector pixel size [m]
+# Geometry
+ENERGY="${ENERGY:-19.55}"
+Z1="${Z1:-0.12669}"
+FOCUSTODETECTORDISTANCE="${FOCUSTODETECTORDISTANCE:-1.55669}"
+DETECTOR_PIXELSIZE="${DETECTOR_PIXELSIZE:-5.5e-7}"
 
-# -----------------------------------------------------------------------------
-# Position conversion for tom_sam_x / tom_y
-# -----------------------------------------------------------------------------
-POSITION_UNIT="${POSITION_UNIT:-mm}"             # m, mm, um, nm, or px
-POS_ROW_SIGN="${POS_ROW_SIGN:--1.0}"             # row shift from tom_y
-POS_COL_SIGN="${POS_COL_SIGN:-1.0}"              # column shift from tom_sam_x
+# Position conversion
+POSITION_UNIT="${POSITION_UNIT:-mm}"
+POS_ROW_SIGN="${POS_ROW_SIGN:--1.0}"
+POS_COL_SIGN="${POS_COL_SIGN:-1.0}"
 CENTER_POSITIONS="${CENTER_POSITIONS:-true}"
 
-# -----------------------------------------------------------------------------
-# Reconstruction square size and NFP solver parameters
-# -----------------------------------------------------------------------------
-# N=2048 uses a centered 2048 x 2048 crop.
-# N=3712 on a 2592 x 3712 frame keeps the full width and pads height symmetrically.
-# N=0 uses N=max(ny, nx), i.e. full field of view padded to square.
+# Reconstruction size and solver parameters
 N="${N:-3712}"
 NITER="${NITER:-5}"
 NCHUNK="${NCHUNK:-4}"
@@ -84,28 +63,22 @@ VIS_STEP="${VIS_STEP:-1}"
 ERR_STEP="${ERR_STEP:-1}"
 RHO="${RHO:-1,2,0.1}"
 
-# -----------------------------------------------------------------------------
-# Execution parameters
-# -----------------------------------------------------------------------------
+# Execution and preprocessing
 RUN_RECONSTRUCTION="${RUN_RECONSTRUCTION:-${DEFAULT_RUN_RECONSTRUCTION}}"
 WRITE_CORRECTED_PREVIEW="${WRITE_CORRECTED_PREVIEW:-true}"
+WRITE_POSITION_BBOX_PLOT="${WRITE_POSITION_BBOX_PLOT:-true}"
+POSITION_BBOX_GRID_SIZE="${POSITION_BBOX_GRID_SIZE:-5}"
 PREVIEW_COUNT="${PREVIEW_COUNT:-8}"
 LOG_LEVEL="${LOG_LEVEL:-INFO}"
 FLAT_CORRECTION="${FLAT_CORRECTION:-false}"
+USE_VALID_DETECTOR_MASK="${USE_VALID_DETECTOR_MASK:-true}"
 NGPUS="${NGPUS:-1}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 MPIRUN_BIN="${MPIRUN_BIN:-mpirun}"
 
 mkdir -p "${OUT_DIR}" "${PATH_OUT}"
 
-# Basic path checks. Keep /path/to placeholders explicit to avoid silent wrong runs.
 for f in "${DARK_FILE}" "${FLAT_FILE}" "${SAMPLE_FILE}"; do
-  if [[ "${f}" == /path/to/* ]]; then
-    echo "ERROR: please set DARK_FILE, FLAT_FILE, and SAMPLE_FILE before running." >&2
-    echo "Example:" >&2
-    echo "  DARK_FILE=/data/dark.h5 FLAT_FILE=/data/flat.h5 SAMPLE_FILE=/data/sample.h5 bash run_step0.sh sanity" >&2
-    exit 2
-  fi
   if [[ ! -f "${f}" ]]; then
     echo "ERROR: input file does not exist: ${f}" >&2
     exit 2
@@ -143,20 +116,25 @@ rho=${RHO}
 
 run_reconstruction=${RUN_RECONSTRUCTION}
 write_corrected_preview=${WRITE_CORRECTED_PREVIEW}
+write_position_bbox_plot=${WRITE_POSITION_BBOX_PLOT}
+position_bbox_grid_size=${POSITION_BBOX_GRID_SIZE}
 preview_count=${PREVIEW_COUNT}
 log_level=${LOG_LEVEL}
 
 flat_correct=${FLAT_CORRECTION}
+use_valid_detector_mask=${USE_VALID_DETECTOR_MASK}
 EOF
 
 echo "=== DanMAX nano step0 launcher ==="
-echo "mode                 : ${MODE}"
-echo "run_reconstruction   : ${RUN_RECONSTRUCTION}"
-echo "config               : ${CONFIG_FILE}"
-echo "h5_out               : ${H5_OUT}"
-echo "log                  : ${LOG_FILE}"
-echo "n                    : ${N}"
-echo "ngpus                : ${NGPUS}"
+echo "mode                    : ${MODE}"
+echo "run_reconstruction      : ${RUN_RECONSTRUCTION}"
+echo "config                  : ${CONFIG_FILE}"
+echo "h5_out                  : ${H5_OUT}"
+echo "log                     : ${LOG_FILE}"
+echo "n                       : ${N}"
+echo "flat_correct            : ${FLAT_CORRECTION}"
+echo "valid_detector_mask     : ${USE_VALID_DETECTOR_MASK}"
+echo "ngpus                   : ${NGPUS}"
 
 unset I_MPI_SHM_LMT
 unset I_MPI_FABRICS_LIST
