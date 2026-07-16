@@ -1,7 +1,7 @@
 experimental/DanMAX_nano/output*/
 # Adapted from github/gitignore
 # Python/C/C++
-
+.idea/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
