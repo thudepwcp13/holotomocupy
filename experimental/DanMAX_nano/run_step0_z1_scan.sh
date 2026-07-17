@@ -38,9 +38,9 @@ mkdir -p "${Z1_SCAN_OUT_ROOT}"
 #   12300 -> 0.12300 m
 #   step 20 -> 0.00020 m
 #   12900 -> 0.12900 m
-Z1_START_SCALED=12300
+Z1_START_SCALED=12400
 Z1_STOP_SCALED=12900
-Z1_STEP_SCALED=20
+Z1_STEP_SCALED=100
 
 TOTAL_RUNS=$(( (Z1_STOP_SCALED - Z1_START_SCALED) / Z1_STEP_SCALED + 1 ))
 RUN_INDEX=0
@@ -67,6 +67,7 @@ for (( z1_scaled=Z1_START_SCALED; z1_scaled<=Z1_STOP_SCALED; z1_scaled+=Z1_STEP_
   # Only Z1 and OUT_DIR are changed here. All other defaults and any environment
   # overrides are handled by the current run_step0.sh.
   Z1="${Z1_VALUE}" \
+  NITER=20 \
   OUT_DIR="${RUN_OUT_DIR}" \
   bash "${RUN_STEP0}" "${MODE}"
 done
