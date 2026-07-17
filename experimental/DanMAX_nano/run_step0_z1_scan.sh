@@ -38,17 +38,17 @@ mkdir -p "${Z1_SCAN_OUT_ROOT}"
 #   12300 -> 0.12300 m
 #   step 20 -> 0.00020 m
 #   12900 -> 0.12900 m
-Z1_START_SCALED=12400
-Z1_STOP_SCALED=12900
-Z1_STEP_SCALED=100
+Z1_START_SCALED=12610
+Z1_STOP_SCALED=12790
+Z1_STEP_SCALED=10
 
 TOTAL_RUNS=$(( (Z1_STOP_SCALED - Z1_START_SCALED) / Z1_STEP_SCALED + 1 ))
 RUN_INDEX=0
 
 printf "=== DanMAX step0 Z1 scan ===\n"
 printf "mode            : %s\n" "${MODE}"
-printf "Z1 range        : 0.12300 ... 0.12900 m\n"
-printf "Z1 step         : 0.00020 m\n"
+printf "Z1 range        : 0.${Z1_START_SCALED} ... 0.${Z1_STOP_SCALED} m\n"
+printf "Z1 step         : 0.000${Z1_STEP_SCALED} m\n"
 printf "number of runs  : %d\n" "${TOTAL_RUNS}"
 printf "output root     : %s\n" "${Z1_SCAN_OUT_ROOT}"
 
@@ -67,7 +67,7 @@ for (( z1_scaled=Z1_START_SCALED; z1_scaled<=Z1_STOP_SCALED; z1_scaled+=Z1_STEP_
   # Only Z1 and OUT_DIR are changed here. All other defaults and any environment
   # overrides are handled by the current run_step0.sh.
   Z1="${Z1_VALUE}" \
-  NITER=20 \
+  NITER=10 \
   OUT_DIR="${RUN_OUT_DIR}" \
   bash "${RUN_STEP0}" "${MODE}"
 done
