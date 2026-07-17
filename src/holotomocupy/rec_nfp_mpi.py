@@ -430,10 +430,22 @@ class RecNFP:
                 logger.info(f"NFP: proj_re TIFF saved → {tiff_path}")
         elif self.rank == 0:
             if hasattr(self, 'path_out'):
+                proj_beta_dir = os.path.join(self.path_out, "proj_beta")
+                proj_delta_dir = os.path.join(self.path_out, "proj_delta")
+                prb_amp_dir = os.path.join(self.path_out, "prb_amp")
+                prb_phase_dir = os.path.join(self.path_out, "prb_phase")
+
+                os.makedirs(proj_beta_dir, exist_ok=True)
+                os.makedirs(proj_delta_dir, exist_ok=True)
+                os.makedirs(prb_amp_dir, exist_ok=True)
+                os.makedirs(prb_phase_dir, exist_ok=True)
+
                 logger.info(f"Saving iter {i}: proj, prb to {self.path_out}")
-                write_tiff(vars['proj'].real,     f'{self.path_out}/proj{i:04}')
-                write_tiff(cp.angle(vars['prb']), f'{self.path_out}/prb{i:04}')
-                np.save(f'{self.path_out}/prb{i:04}.npy', vars['prb'].get())
+                write_tiff(vars['proj'].real,     f'{proj_beta_dir}/proj_beta{i:04}')
+                write_tiff(cp.angle(vars['proj']), f'{proj_delta_dir}/proj_delta{i:04}')
+                write_tiff(vars['prb'].real, f'{prb_amp_dir}/proj_amp{i:04}')
+                write_tiff(cp.angle(vars['prb']), f'{prb_phase_dir}/prb_phase{i:04}')
+                # np.save(f'{self.path_out}/prb{i:04}.npy', vars['prb'].get())
             else:
                 mshow(vars['proj'].real, True)
                 mshow_polar(vars['prb'], True)

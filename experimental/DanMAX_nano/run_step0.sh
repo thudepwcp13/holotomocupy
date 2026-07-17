@@ -31,13 +31,6 @@ DARK_FILE="${DARK_FILE:-${DATA_FOLDER}/scan-0076.h5}"
 FLAT_FILE="${FLAT_FILE:-${DATA_FOLDER}/scan-0097.h5}"
 SAMPLE_FILE="${SAMPLE_FILE:-${DATA_FOLDER}/scan-0096.h5}"
 
-# Output paths
-OUT_DIR="${OUT_DIR:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/output/output_step0_v4_3712_pos0_iter10_100frames}"
-CONFIG_FILE="${CONFIG_FILE:-${OUT_DIR}/config_step0.generated.conf}"
-H5_OUT="${H5_OUT:-${OUT_DIR}/DanMAX_nano_nfp_results.h5}"
-PATH_OUT="${PATH_OUT:-${OUT_DIR}/nfp_work}"
-LOG_FILE="${LOG_FILE:-${OUT_DIR}/step0_${MODE}.log}"
-
 # DanMAX HDF5 paths
 DETECTOR_PATH="${DETECTOR_PATH:-/entry/measurement/orca}"
 X_PATH="${X_PATH:-/entry/measurement/tom_sam_x}"
@@ -62,6 +55,14 @@ NCHUNK="${NCHUNK:-4}"
 VIS_STEP="${VIS_STEP:-1}"
 ERR_STEP="${ERR_STEP:-1}"
 RHO="${RHO:-1,2,0.00001}"
+FRAME_IDS="${FRAME_IDS:-all}"
+
+# Output paths
+OUT_DIR="${OUT_DIR:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/output/output_step0_v4_${N}_pos0_iter${NITER}_100frames}"
+CONFIG_FILE="${CONFIG_FILE:-${OUT_DIR}/config_step0.generated.conf}"
+H5_OUT="${H5_OUT:-${OUT_DIR}/DanMAX_nano_nfp_results.h5}"
+PATH_OUT="${PATH_OUT:-${OUT_DIR}/nfp_work}"
+LOG_FILE="${LOG_FILE:-${OUT_DIR}/step0_${MODE}.log}"
 
 # Execution and preprocessing
 RUN_RECONSTRUCTION="${RUN_RECONSTRUCTION:-${DEFAULT_RUN_RECONSTRUCTION}}"
@@ -123,7 +124,7 @@ log_level=${LOG_LEVEL}
 
 flat_correct=${FLAT_CORRECTION}
 use_valid_detector_mask=${USE_VALID_DETECTOR_MASK}
-frame_ids=all
+frame_ids=${FRAME_IDS}
 EOF
 #frame_ids=30,34,38,42,46,50,54,58,62,66,69
 
