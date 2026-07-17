@@ -50,7 +50,7 @@ CENTER_POSITIONS="${CENTER_POSITIONS:-true}"
 
 # Reconstruction size and solver parameters
 N="${N:-3712}"
-NITER="${NITER:-10}"
+NITER="${NITER:-200}"
 NCHUNK="${NCHUNK:-4}"
 VIS_STEP="${VIS_STEP:-1}"
 ERR_STEP="${ERR_STEP:-1}"
