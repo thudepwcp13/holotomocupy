@@ -31,13 +31,6 @@ DARK_FILE="${DARK_FILE:-${DATA_FOLDER}/scan-0076.h5}"
 FLAT_FILE="${FLAT_FILE:-${DATA_FOLDER}/scan-0097.h5}"
 SAMPLE_FILE="${SAMPLE_FILE:-${DATA_FOLDER}/scan-0096.h5}"
 
-# Output paths
-OUT_DIR="${OUT_DIR:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/output/output_step0_v4_3712_pos_row_iter100_40frames}"
-CONFIG_FILE="${CONFIG_FILE:-${OUT_DIR}/config_step0.generated.conf}"
-H5_OUT="${H5_OUT:-${OUT_DIR}/DanMAX_nano_nfp_results.h5}"
-PATH_OUT="${PATH_OUT:-${OUT_DIR}/nfp_work}"
-LOG_FILE="${LOG_FILE:-${OUT_DIR}/step0_${MODE}.log}"
-
 # DanMAX HDF5 paths
 DETECTOR_PATH="${DETECTOR_PATH:-/entry/measurement/orca}"
 X_PATH="${X_PATH:-/entry/measurement/tom_sam_x}"
@@ -57,11 +50,22 @@ CENTER_POSITIONS="${CENTER_POSITIONS:-true}"
 
 # Reconstruction size and solver parameters
 N="${N:-3712}"
-NITER="${NITER:-100}"
+NITER="${NITER:-10}"
 NCHUNK="${NCHUNK:-4}"
 VIS_STEP="${VIS_STEP:-1}"
 ERR_STEP="${ERR_STEP:-1}"
-RHO="${RHO:-1,2,0.1}"
+RHO="${RHO:-1,2,0.00001}"
+FRAME_IDS="${FRAME_IDS:-all}"
+FLAT_LOSS_WEIGHT="${FLAT_LOSS_WEIGHT:-1.0}"
+SAVE_FLAT_DIAGNOSTICS="${SAVE_FLAT_DIAGNOSTICS:-true}"
+
+
+# Output paths
+OUT_DIR="${OUT_DIR:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/output/output_step0_v2_${N}_pos0_iter${NITER}_100frames}"
+CONFIG_FILE="${CONFIG_FILE:-${OUT_DIR}/config_step0.generated.conf}"
+H5_OUT="${H5_OUT:-${OUT_DIR}/DanMAX_nano_nfp_results.h5}"
+PATH_OUT="${PATH_OUT:-${OUT_DIR}/nfp_work}"
+LOG_FILE="${LOG_FILE:-${OUT_DIR}/step0_${MODE}.log}"
 
 # Execution and preprocessing
 RUN_RECONSTRUCTION="${RUN_RECONSTRUCTION:-${DEFAULT_RUN_RECONSTRUCTION}}"
@@ -123,8 +127,11 @@ log_level=${LOG_LEVEL}
 
 flat_correct=${FLAT_CORRECTION}
 use_valid_detector_mask=${USE_VALID_DETECTOR_MASK}
-frame_ids=30-69
+frame_ids=${FRAME_IDS}
+flat_loss_weight=${FLAT_LOSS_WEIGHT}
+save_flat_diagnostics=${SAVE_FLAT_DIAGNOSTICS}
 EOF
+#frame_ids=30,34,38,42,46,50,54,58,62,66,69
 
 echo "=== DanMAX nano step0 launcher ==="
 echo "mode                    : ${MODE}"
@@ -141,15 +148,15 @@ unset I_MPI_SHM_LMT
 unset I_MPI_FABRICS_LIST
 if [[ "${RUN_RECONSTRUCTION}" == "true" || "${RUN_RECONSTRUCTION}" == "True" || "${RUN_RECONSTRUCTION}" == "1" ]]; then
   if [[ "${NGPUS}" -gt 1 ]]; then
-    echo "Running: ${MPIRUN_BIN} -n ${NGPUS} ${PYTHON_BIN} step0.py ${CONFIG_FILE}"
-    "${MPIRUN_BIN}" -n "${NGPUS}" "${PYTHON_BIN}" step0.py "${CONFIG_FILE}" 2>&1 | tee "${LOG_FILE}"
+    echo "Running: ${MPIRUN_BIN} -n ${NGPUS} ${PYTHON_BIN} step0_v2.py ${CONFIG_FILE}"
+    "${MPIRUN_BIN}" -n "${NGPUS}" "${PYTHON_BIN}" step0_v2.py "${CONFIG_FILE}" 2>&1 | tee "${LOG_FILE}"
   else
-    echo "Running: ${PYTHON_BIN} step0.py ${CONFIG_FILE}"
-    "${PYTHON_BIN}" step0.py "${CONFIG_FILE}" 2>&1 | tee "${LOG_FILE}"
+    echo "Running: ${PYTHON_BIN} step0_v2.py ${CONFIG_FILE}"
+    "${PYTHON_BIN}" step0_v2.py "${CONFIG_FILE}" 2>&1 | tee "${LOG_FILE}"
   fi
 else
-  echo "Running sanity check only: ${PYTHON_BIN} step0.py ${CONFIG_FILE}"
-  "${PYTHON_BIN}" step0.py "${CONFIG_FILE}" 2>&1 | tee "${LOG_FILE}"
+  echo "Running sanity check only: ${PYTHON_BIN} step0_v2.py ${CONFIG_FILE}"
+  "${PYTHON_BIN}" step0_v2.py "${CONFIG_FILE}" 2>&1 | tee "${LOG_FILE}"
 fi
 
 echo "Done. Output HDF5: ${H5_OUT}"

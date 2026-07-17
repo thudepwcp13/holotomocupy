@@ -24,6 +24,7 @@ esac
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
 
+<<<<<<< HEAD
 # Input files and HDF5 key layout.
 # Use {n} rather than ${n} in shell defaults to avoid nested Bash parameter
 # expansion. step0.py accepts both {n} and ${n} in generated config files.
@@ -40,6 +41,22 @@ SAMPLE_KEY="${SAMPLE_KEY:-/{n}.1/measurement/pco1}"
 SAMPLE_SCAN_IDS="${SAMPLE_SCAN_IDS:-1:256}"
 MOTOR_X_KEY="${MOTOR_X_KEY:-/{n}.1/instrument/positioners/sy}"
 MOTOR_Y_KEY="${MOTOR_Y_KEY:-/{n}.1/instrument/positioners/sz}"
+=======
+# Input files and HDF5 key layout
+DARK_FILE="${DARK_FILE:-/zhome/64/c/214423/bioconfert/raw_data_extern/2026_05_07_ESRF_ID16B/RAW_DATA/S2_C1/S2_C1_ht_55nm_06/S2_C1_ht_55nm_06.h5}"
+DARK_KEY="${DARK_KEY:-/3.1/measurement/pco1}"
+DARK_NFRAMES="${DARK_NFRAMES:-51}"
+
+FLAT_FILE="${FLAT_FILE:-/zhome/64/c/214423/bioconfert/raw_data_extern/2026_05_07_ESRF_ID16B/RAW_DATA/ptycho_ref_ter/ptycho_ref_ter_0001/ptycho_ref_ter_0001.h5}"
+FLAT_KEY="${FLAT_KEY:-/\${n}.1/measurement/pco1}"
+FLAT_SCAN_IDS="${FLAT_SCAN_IDS:-1:10}"
+
+SAMPLE_FILE="${SAMPLE_FILE:-/zhome/64/c/214423/bioconfert/raw_data_extern/2026_05_07_ESRF_ID16B/RAW_DATA/ptycho_ht_55nm_06_ter/ptycho_ht_55nm_06_ter_0001/ptycho_ht_55nm_06_ter_0001.h5}"
+SAMPLE_KEY="${SAMPLE_KEY:-/\${n}.1/measurement/pco1}"
+SAMPLE_SCAN_IDS="${SAMPLE_SCAN_IDS:-1:256:4}"
+MOTOR_X_KEY="${MOTOR_X_KEY:-/\${n}.1/instrument/positioners/sy}"
+MOTOR_Y_KEY="${MOTOR_Y_KEY:-/\${n}.1/instrument/positioners/sz}"
+>>>>>>> 78c2b9b (change the config for ID16B)
 FRAME_IDS="${FRAME_IDS:-all}"
 
 # Geometry
