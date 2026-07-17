@@ -32,7 +32,7 @@ FLAT_FILE="${FLAT_FILE:-${DATA_FOLDER}/scan-0097.h5}"
 SAMPLE_FILE="${SAMPLE_FILE:-${DATA_FOLDER}/scan-0096.h5}"
 
 # Output paths
-OUT_DIR="${OUT_DIR:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/output/output_step0_v4_3712_pos0_iter10_100frames}"
+OUT_DIR="${OUT_DIR:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/output/output_step0_v4_3712_pos_row_iter100_40frames}"
 CONFIG_FILE="${CONFIG_FILE:-${OUT_DIR}/config_step0.generated.conf}"
 H5_OUT="${H5_OUT:-${OUT_DIR}/DanMAX_nano_nfp_results.h5}"
 PATH_OUT="${PATH_OUT:-${OUT_DIR}/nfp_work}"
@@ -57,11 +57,11 @@ CENTER_POSITIONS="${CENTER_POSITIONS:-true}"
 
 # Reconstruction size and solver parameters
 N="${N:-3712}"
-NITER="${NITER:-10}"
+NITER="${NITER:-100}"
 NCHUNK="${NCHUNK:-4}"
 VIS_STEP="${VIS_STEP:-1}"
 ERR_STEP="${ERR_STEP:-1}"
-RHO="${RHO:-1,2,0.00001}"
+RHO="${RHO:-1,2,0.1}"
 
 # Execution and preprocessing
 RUN_RECONSTRUCTION="${RUN_RECONSTRUCTION:-${DEFAULT_RUN_RECONSTRUCTION}}"
@@ -123,9 +123,8 @@ log_level=${LOG_LEVEL}
 
 flat_correct=${FLAT_CORRECTION}
 use_valid_detector_mask=${USE_VALID_DETECTOR_MASK}
-frame_ids=all
+frame_ids=30-69
 EOF
-#frame_ids=30,34,38,42,46,50,54,58,62,66,69
 
 echo "=== DanMAX nano step0 launcher ==="
 echo "mode                    : ${MODE}"
