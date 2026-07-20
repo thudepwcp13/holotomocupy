@@ -30,15 +30,16 @@ DARK_KEY="${DARK_KEY:-/3.1/measurement/pco1}"
 DARK_NFRAMES="${DARK_NFRAMES:-51}"
 
 FLAT_FILE="${FLAT_FILE:-/zhome/64/c/214423/bioconfert/raw_data_extern/2026_05_07_ESRF_ID16B/RAW_DATA/ptycho_ref_ter/ptycho_ref_ter_0001/ptycho_ref_ter_0001.h5}"
-FLAT_KEY="${FLAT_KEY:-/\${n}.1/measurement/pco1}"
+FLAT_KEY='/{n}.1/measurement/pco1'
 FLAT_SCAN_IDS="${FLAT_SCAN_IDS:-1:10}"
 
 SAMPLE_FILE="${SAMPLE_FILE:-/zhome/64/c/214423/bioconfert/raw_data_extern/2026_05_07_ESRF_ID16B/RAW_DATA/ptycho_ht_55nm_06_ter/ptycho_ht_55nm_06_ter_0001/ptycho_ht_55nm_06_ter_0001.h5}"
-SAMPLE_KEY="${SAMPLE_KEY:-/\${n}.1/measurement/pco1}"
+SAMPLE_KEY='/{n}.1/measurement/pco1'
 SAMPLE_SCAN_IDS="${SAMPLE_SCAN_IDS:-1:256:4}"
-MOTOR_X_KEY="${MOTOR_X_KEY:-/\${n}.1/instrument/positioners/sy}"
-MOTOR_Y_KEY="${MOTOR_Y_KEY:-/\${n}.1/instrument/positioners/sz}"
->>>>>>> 78c2b9b (change the config for ID16B)
+
+MOTOR_X_KEY='/{n}.1/instrument/positioners/sy'
+MOTOR_Y_KEY='/{n}.1/instrument/positioners/sz'
+
 FRAME_IDS="${FRAME_IDS:-all}"
 
 # Geometry
@@ -62,7 +63,7 @@ ERR_STEP="${ERR_STEP:-1}"
 RHO="${RHO:-1,2,0.00001}"
 
 # Output paths
-OUT_DIR="${OUT_DIR:-${SCRIPT_DIR}/output_step0}"
+OUT_DIR="${OUT_DIR:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/ID16B_output/output_step0}"
 CONFIG_FILE="${CONFIG_FILE:-${OUT_DIR}/config_step0.generated.conf}"
 H5_OUT="${H5_OUT:-${OUT_DIR}/ID16B_nfp_results.h5}"
 PATH_OUT="${PATH_OUT:-${OUT_DIR}}"
