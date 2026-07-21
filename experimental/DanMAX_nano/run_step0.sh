@@ -26,10 +26,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
 
 # Input files
-DATA_FOLDER="/dtu/3d-imaging-center/projects/2026_DANFIX_XHIST/raw_data_3DIM/DanMAX April 2026/NTT_multi_dist/"
-DARK_FILE="${DARK_FILE:-${DATA_FOLDER}/scan-0076.h5}"
-FLAT_FILE="${FLAT_FILE:-${DATA_FOLDER}/scan-0097.h5}"
-SAMPLE_FILE="${SAMPLE_FILE:-${DATA_FOLDER}/scan-0096.h5}"
+#DATA_FOLDER="/dtu/3d-imaging-center/projects/2026_DANFIX_XHIST/raw_data_3DIM/DanMAX April 2026/NTT_multi_dist/"
+#DARK_FILE="${DARK_FILE:-${DATA_FOLDER}/scan-0076.h5}"
+#FLAT_FILE="${FLAT_FILE:-${DATA_FOLDER}/scan-0097.h5}"
+#SAMPLE_FILE="${SAMPLE_FILE:-${DATA_FOLDER}/scan-0096.h5}"
+
+DATA_FOLDER="/dtu/3d-imaging-center/projects/2026_DANFIX_XHIST/raw_data_3DIM/DanMAX April 2026/Si_spheres_tomo_code_550nm/"
+DARK_FILE="${DARK_FILE:-${DATA_FOLDER}/scan-0156.h5}"
+FLAT_FILE="${FLAT_FILE:-${DATA_FOLDER}/scan-0187.h5}"
+SAMPLE_FILE="${SAMPLE_FILE:-${DATA_FOLDER}/scan-0185.h5}"
 
 # DanMAX HDF5 paths
 DETECTOR_PATH="${DETECTOR_PATH:-/entry/measurement/orca}"
@@ -38,8 +43,10 @@ Y_PATH="${Y_PATH:-/entry/measurement/tom_y}"
 
 # Geometry
 ENERGY="${ENERGY:-19.55}"
-Z1="${Z1:-0.12669}"
-FOCUSTODETECTORDISTANCE="${FOCUSTODETECTORDISTANCE:-1.55669}"
+Z1="${Z1:-0.14669}"
+FOCUSTODETECTORDISTANCE="${FOCUSTODETECTORDISTANCE:-1.57669}"
+#Z1="${Z1:-0.12669}"
+#FOCUSTODETECTORDISTANCE="${FOCUSTODETECTORDISTANCE:-1.55669}"
 DETECTOR_PIXELSIZE="${DETECTOR_PIXELSIZE:-5.5e-7}"
 
 # Position conversion
@@ -50,15 +57,17 @@ CENTER_POSITIONS="${CENTER_POSITIONS:-true}"
 
 # Reconstruction size and solver parameters
 N="${N:-3712}"
-NITER="${NITER:-200}"
+NITER="${NITER:-10}"
 NCHUNK="${NCHUNK:-4}"
 VIS_STEP="${VIS_STEP:-1}"
 ERR_STEP="${ERR_STEP:-1}"
-RHO="${RHO:-1,2,0.00001}"
+RHO="${RHO:-1,2,0.0001}"
 FRAME_IDS="${FRAME_IDS:-all}"
 
 # Output paths
-OUT_DIR="${OUT_DIR:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/output/output_step0_v4_${N}_pos0_iter${NITER}_100frames}"
+#OUT_DIR="${OUT_DIR:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/output/output_step0_v1_${N}_pos0p1_proj0p1_iter${NITER}_100frames}"
+OUT_DIR="${OUT_DIR:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/output/CA_output_step0_v1_${N}_pos0_iter${NITER}_100frames}"
+
 CONFIG_FILE="${CONFIG_FILE:-${OUT_DIR}/config_step0.generated.conf}"
 H5_OUT="${H5_OUT:-${OUT_DIR}/DanMAX_nano_nfp_results.h5}"
 PATH_OUT="${PATH_OUT:-${OUT_DIR}/nfp_work}"

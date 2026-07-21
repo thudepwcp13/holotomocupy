@@ -2,14 +2,13 @@
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
-# DanMAX nano step0 launcher
+# ID16B NFP step0 launcher
 # -----------------------------------------------------------------------------
 # Usage:
-#   bash run_step0.sh sanity   # validate HDF5 layout and write preview
-#   bash run_step0.sh nfp      # run near-field ptychography reconstruction
-#
-# Example masked full-width run:
-#   N=3712 USE_VALID_DETECTOR_MASK=true NGPUS=1 bash run_step0.sh nfp
+#   DARK_FILE=/data/dark.h5 FLAT_FILE=/data/flat.h5 SAMPLE_FILE=/data/sample.h5 \
+#     bash run_step0.sh sanity
+#   DARK_FILE=/data/dark.h5 FLAT_FILE=/data/flat.h5 SAMPLE_FILE=/data/sample.h5 \
+#     bash run_step0.sh nfp
 # -----------------------------------------------------------------------------
 
 MODE="${1:-sanity}"
@@ -25,90 +24,93 @@ esac
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
 
-# Input files
-#DATA_FOLDER="/dtu/3d-imaging-center/projects/2026_DANFIX_XHIST/raw_data_3DIM/DanMAX April 2026/NTT_multi_dist/"
-#DARK_FILE="${DARK_FILE:-${DATA_FOLDER}/scan-0076.h5}"
-#FLAT_FILE="${FLAT_FILE:-${DATA_FOLDER}/scan-0097.h5}"
-#SAMPLE_FILE="${SAMPLE_FILE:-${DATA_FOLDER}/scan-0096.h5}"
+# Input files and HDF5 key layout
+DARK_FILE="${DARK_FILE:-/zhome/64/c/214423/bioconfert/raw_data_extern/2026_05_07_ESRF_ID16B/RAW_DATA/S2_C1/S2_C1_ht_55nm_06/S2_C1_ht_55nm_06.h5}"
+DARK_KEY="${DARK_KEY:-/3.1/measurement/pco1}"
+DARK_NFRAMES="${DARK_NFRAMES:-51}"
 
-DATA_FOLDER="/dtu/3d-imaging-center/projects/2026_DANFIX_XHIST/raw_data_3DIM/DanMAX April 2026/Si_spheres_tomo_code_550nm/"
-DARK_FILE="${DARK_FILE:-${DATA_FOLDER}/scan-0156.h5}"
-FLAT_FILE="${FLAT_FILE:-${DATA_FOLDER}/scan-0187.h5}"
-SAMPLE_FILE="${SAMPLE_FILE:-${DATA_FOLDER}/scan-0185.h5}"
+FLAT_FILE="${FLAT_FILE:-/zhome/64/c/214423/bioconfert/raw_data_extern/2026_05_07_ESRF_ID16B/RAW_DATA/ptycho_ref_ter/ptycho_ref_ter_0001/ptycho_ref_ter_0001.h5}"
+FLAT_KEY='/{n}.1/measurement/pco1'
+FLAT_SCAN_IDS="${FLAT_SCAN_IDS:-1:10}"
 
-# DanMAX HDF5 paths
-DETECTOR_PATH="${DETECTOR_PATH:-/entry/measurement/orca}"
-X_PATH="${X_PATH:-/entry/measurement/tom_sam_x}"
-Y_PATH="${Y_PATH:-/entry/measurement/tom_y}"
+SAMPLE_FILE="${SAMPLE_FILE:-/zhome/64/c/214423/bioconfert/raw_data_extern/2026_05_07_ESRF_ID16B/RAW_DATA/ptycho_ht_55nm_06_ter/ptycho_ht_55nm_06_ter_0001/ptycho_ht_55nm_06_ter_0001.h5}"
+SAMPLE_KEY='/{n}.1/measurement/pco1'
+SAMPLE_SCAN_IDS="${SAMPLE_SCAN_IDS:-1:256:4}"
+
+MOTOR_X_KEY='/{n}.1/instrument/positioners/sy'
+MOTOR_Y_KEY='/{n}.1/instrument/positioners/sz'
+
+FRAME_IDS="${FRAME_IDS:-all}"
 
 # Geometry
-ENERGY="${ENERGY:-19.55}"
-Z1="${Z1:-0.14669}"
-FOCUSTODETECTORDISTANCE="${FOCUSTODETECTORDISTANCE:-1.57669}"
-#Z1="${Z1:-0.12669}"
-#FOCUSTODETECTORDISTANCE="${FOCUSTODETECTORDISTANCE:-1.55669}"
-DETECTOR_PIXELSIZE="${DETECTOR_PIXELSIZE:-5.5e-7}"
+ENERGY="${ENERGY:-29.63}"
+Z1="${Z1:-0.059599}"
+FOCUSTODETECTORDISTANCE="${FOCUSTODETECTORDISTANCE:-0.704433}"
+DETECTOR_PIXELSIZE="${DETECTOR_PIXELSIZE:-6.5e-7}"
 
 # Position conversion
 POSITION_UNIT="${POSITION_UNIT:-mm}"
-POS_ROW_SIGN="${POS_ROW_SIGN:-1.0}"
+POS_ROW_SIGN="${POS_ROW_SIGN:--1.0}"
 POS_COL_SIGN="${POS_COL_SIGN:-1.0}"
 CENTER_POSITIONS="${CENTER_POSITIONS:-true}"
 
-# Reconstruction size and solver parameters
-N="${N:-3712}"
+# Reconstruction parameters
+N="${N:-2048}"
 NITER="${NITER:-10}"
 NCHUNK="${NCHUNK:-4}"
 VIS_STEP="${VIS_STEP:-1}"
 ERR_STEP="${ERR_STEP:-1}"
-RHO="${RHO:-1,2,0.0001}"
-FRAME_IDS="${FRAME_IDS:-all}"
+RHO="${RHO:-1,2,0.00001}"
+
+# Output paths
+OUT_DIR="${OUT_DIR:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/ID16B_output/output_step0_v2}"
+CONFIG_FILE="${CONFIG_FILE:-${OUT_DIR}/config_step0.generated.conf}"
+H5_OUT="${H5_OUT:-${OUT_DIR}/ID16B_nfp_results.h5}"
+PATH_OUT="${PATH_OUT:-${OUT_DIR}}"
+LOG_FILE="${LOG_FILE:-${OUT_DIR}/step0_${MODE}.log}"
+
 FLAT_LOSS_WEIGHT="${FLAT_LOSS_WEIGHT:-1.0}"
 SAVE_FLAT_DIAGNOSTICS="${SAVE_FLAT_DIAGNOSTICS:-true}"
 
-
-# Output paths
-#OUT_DIR="${OUT_DIR:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/output/output_step0_v2_${N}_pos0p1_iter${NITER}_100frames}"
-OUT_DIR="${OUT_DIR:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/output/CA_output_step0_v2_${N}_pos0_iter${NITER}_100frames}"
-
-CONFIG_FILE="${CONFIG_FILE:-${OUT_DIR}/config_step0.generated.conf}"
-H5_OUT="${H5_OUT:-${OUT_DIR}/DanMAX_nano_nfp_results.h5}"
-PATH_OUT="${PATH_OUT:-${OUT_DIR}/nfp_work}"
-LOG_FILE="${LOG_FILE:-${OUT_DIR}/step0_${MODE}.log}"
-
 # Execution and preprocessing
 RUN_RECONSTRUCTION="${RUN_RECONSTRUCTION:-${DEFAULT_RUN_RECONSTRUCTION}}"
+FLAT_CORRECTION="${FLAT_CORRECTION:-false}"
 WRITE_CORRECTED_PREVIEW="${WRITE_CORRECTED_PREVIEW:-true}"
+PREVIEW_COUNT="${PREVIEW_COUNT:-8}"
 WRITE_POSITION_BBOX_PLOT="${WRITE_POSITION_BBOX_PLOT:-true}"
 POSITION_BBOX_GRID_SIZE="${POSITION_BBOX_GRID_SIZE:-5}"
-PREVIEW_COUNT="${PREVIEW_COUNT:-8}"
 LOG_LEVEL="${LOG_LEVEL:-INFO}"
-FLAT_CORRECTION="${FLAT_CORRECTION:-false}"
-USE_VALID_DETECTOR_MASK="${USE_VALID_DETECTOR_MASK:-true}"
 NGPUS="${NGPUS:-1}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 MPIRUN_BIN="${MPIRUN_BIN:-mpirun}"
 
 mkdir -p "${OUT_DIR}" "${PATH_OUT}"
 
-for f in "${DARK_FILE}" "${FLAT_FILE}" "${SAMPLE_FILE}"; do
-  if [[ ! -f "${f}" ]]; then
-    echo "ERROR: input file does not exist: ${f}" >&2
+for file in "${DARK_FILE}" "${FLAT_FILE}" "${SAMPLE_FILE}"; do
+  if [[ "${file}" == /path/to/* || ! -f "${file}" ]]; then
+    echo "ERROR: input file does not exist: ${file}" >&2
     exit 2
   fi
 done
 
-cat > "${CONFIG_FILE}" <<EOF
+cat > "${CONFIG_FILE}" <<CONF
 dark_file=${DARK_FILE}
+dark_key=${DARK_KEY}
+dark_nframes=${DARK_NFRAMES}
+
 flat_file=${FLAT_FILE}
+flat_key=${FLAT_KEY}
+flat_scan_ids=${FLAT_SCAN_IDS}
+
 sample_file=${SAMPLE_FILE}
+sample_key=${SAMPLE_KEY}
+sample_scan_ids=${SAMPLE_SCAN_IDS}
+frame_ids=${FRAME_IDS}
+motor_x_key=${MOTOR_X_KEY}
+motor_y_key=${MOTOR_Y_KEY}
 
 h5_out=${H5_OUT}
 path_out=${PATH_OUT}
-
-detector_path=${DETECTOR_PATH}
-x_path=${X_PATH}
-y_path=${Y_PATH}
 
 energy=${ENERGY}
 z1=${Z1}
@@ -127,44 +129,37 @@ vis_step=${VIS_STEP}
 err_step=${ERR_STEP}
 rho=${RHO}
 
+flat_correct=${FLAT_CORRECTION}
 run_reconstruction=${RUN_RECONSTRUCTION}
 write_corrected_preview=${WRITE_CORRECTED_PREVIEW}
+preview_count=${PREVIEW_COUNT}
 write_position_bbox_plot=${WRITE_POSITION_BBOX_PLOT}
 position_bbox_grid_size=${POSITION_BBOX_GRID_SIZE}
-preview_count=${PREVIEW_COUNT}
 log_level=${LOG_LEVEL}
 
-flat_correct=${FLAT_CORRECTION}
-use_valid_detector_mask=${USE_VALID_DETECTOR_MASK}
-frame_ids=${FRAME_IDS}
 flat_loss_weight=${FLAT_LOSS_WEIGHT}
 save_flat_diagnostics=${SAVE_FLAT_DIAGNOSTICS}
-EOF
-#frame_ids=30,34,38,42,46,50,54,58,62,66,69
+CONF
 
-echo "=== DanMAX nano step0 launcher ==="
+echo "=== ID16B NFP step0 launcher ==="
 echo "mode                    : ${MODE}"
 echo "run_reconstruction      : ${RUN_RECONSTRUCTION}"
 echo "config                  : ${CONFIG_FILE}"
 echo "h5_out                  : ${H5_OUT}"
-echo "log                     : ${LOG_FILE}"
+echo "sample scan IDs         : ${SAMPLE_SCAN_IDS}"
+echo "selected frame IDs      : ${FRAME_IDS}"
 echo "n                       : ${N}"
-echo "flat_correct            : ${FLAT_CORRECTION}"
-echo "valid_detector_mask     : ${USE_VALID_DETECTOR_MASK}"
 echo "ngpus                   : ${NGPUS}"
 
 unset I_MPI_SHM_LMT
 unset I_MPI_FABRICS_LIST
 if [[ "${RUN_RECONSTRUCTION}" == "true" || "${RUN_RECONSTRUCTION}" == "True" || "${RUN_RECONSTRUCTION}" == "1" ]]; then
   if [[ "${NGPUS}" -gt 1 ]]; then
-    echo "Running: ${MPIRUN_BIN} -n ${NGPUS} ${PYTHON_BIN} step0_v2.py ${CONFIG_FILE}"
     "${MPIRUN_BIN}" -n "${NGPUS}" "${PYTHON_BIN}" step0_v2.py "${CONFIG_FILE}" 2>&1 | tee "${LOG_FILE}"
   else
-    echo "Running: ${PYTHON_BIN} step0_v2.py ${CONFIG_FILE}"
     "${PYTHON_BIN}" step0_v2.py "${CONFIG_FILE}" 2>&1 | tee "${LOG_FILE}"
   fi
 else
-  echo "Running sanity check only: ${PYTHON_BIN} step0_v2.py ${CONFIG_FILE}"
   "${PYTHON_BIN}" step0_v2.py "${CONFIG_FILE}" 2>&1 | tee "${LOG_FILE}"
 fi
 
