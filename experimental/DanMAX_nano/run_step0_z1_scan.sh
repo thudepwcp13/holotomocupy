@@ -31,16 +31,16 @@ if [[ ! -f "${RUN_STEP0}" ]]; then
 fi
 
 # Root directory for all Z1 experiments. Each Z1 gets its own subdirectory.
-Z1_SCAN_OUT_ROOT="${Z1_SCAN_OUT_ROOT:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/output/z1_scan_step0}"
+Z1_SCAN_OUT_ROOT="${Z1_SCAN_OUT_ROOT:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/output/CA_z1_scan_step0}"
 mkdir -p "${Z1_SCAN_OUT_ROOT}"
 
 # Integer representation in units of 1e-5 m avoids floating-point accumulation:
 #   12300 -> 0.12300 m
 #   step 20 -> 0.00020 m
 #   12900 -> 0.12900 m
-Z1_START_SCALED=12610
-Z1_STOP_SCALED=12790
-Z1_STEP_SCALED=10
+Z1_START_SCALED=14600
+Z1_STOP_SCALED=15300
+Z1_STEP_SCALED=50
 
 TOTAL_RUNS=$(( (Z1_STOP_SCALED - Z1_START_SCALED) / Z1_STEP_SCALED + 1 ))
 RUN_INDEX=0

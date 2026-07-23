@@ -63,7 +63,7 @@ ERR_STEP="${ERR_STEP:-1}"
 RHO="${RHO:-1,2,0.00001}"
 
 # Output paths
-OUT_DIR="${OUT_DIR:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/ID16B_output/output_step0}"
+OUT_DIR="${OUT_DIR:-/zhome/64/c/214423/BioToBank/raw_data_extern/XHIST/ID16B_output/output_step0_0deg_gap4}"
 CONFIG_FILE="${CONFIG_FILE:-${OUT_DIR}/config_step0.generated.conf}"
 H5_OUT="${H5_OUT:-${OUT_DIR}/ID16B_nfp_results.h5}"
 PATH_OUT="${PATH_OUT:-${OUT_DIR}}"
